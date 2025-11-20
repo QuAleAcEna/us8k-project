@@ -8,13 +8,13 @@ import seaborn as sns
 # CNN
 from train_iter1 import (
     US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
-    BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN,
+    BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
     DEVICE as DEVICE_CNN
 )
 # RNN
 from train_rnn_iter1 import (
     US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
-    BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN,
+    BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
     DEVICE as DEVICE_RNN
 )
 
@@ -33,7 +33,8 @@ def make_splits_for(test_fold:int, val_fold:int):
     te = META[META.fold == test_fold]
     return tr, va, te
 
-def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None):
+def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
+                 batch:int=None, lr:float=None, dropout:float=None):
     """
     Treina e avalia num fold:
       - model_type: "cnn" ou "rnn"
@@ -45,19 +46,21 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None):
     from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
     if model_type == "cnn":
-        Dataset = US8K_CNN
-        Model   = AudioCNN
-        BATCH   = BATCH_CNN
-        LR      = LR_CNN
+        Dataset   = US8K_CNN
+        Model     = AudioCNN
+        BATCH     = batch or BATCH_CNN
+        LR        = lr or LR_CNN
+        DROPOUT   = dropout if dropout is not None else DROPOUT_CNN
         N_CLASSES = N_CLASSES_CNN
-        DEVICE  = DEVICE_CNN
+        DEVICE    = DEVICE_CNN
     elif model_type == "rnn":
-        Dataset = US8K_RNN
-        Model   = AudioGRU
-        BATCH   = BATCH_RNN
-        LR      = LR_RNN
+        Dataset   = US8K_RNN
+        Model     = AudioGRU
+        BATCH     = batch or BATCH_RNN
+        LR        = lr or LR_RNN
+        DROPOUT   = dropout if dropout is not None else DROPOUT_RNN
         N_CLASSES = N_CLASSES_RNN
-        DEVICE  = DEVICE_RNN
+        DEVICE    = DEVICE_RNN
     else:
         raise ValueError("model_type deve ser 'cnn' ou 'rnn'")
 
@@ -71,7 +74,7 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None):
     va_dl = DataLoader(Dataset(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0, pin_memory=True)
     te_dl = DataLoader(Dataset(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0, pin_memory=True)
 
-    model = Model().to(DEVICE)
+    model = Model(dropout=DROPOUT).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
     opt   = torch.optim.Adam(model.parameters(), lr=LR)
 
@@ -119,10 +122,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=["cnn","rnn"], required=True, help="Qual modelo correr para 10 folds")
     parser.add_argument("--epochs", type=int, default=None, help="Override de epochs (senão usa os do treino original)")
+    parser.add_argument("--batch", type=int, default=None, help="Override de batch size")
+    parser.add_argument("--lr", type=float, default=None, help="Override de learning rate")
+    parser.add_argument("--dropout", type=float, default=None, help="Override de dropout")
     args = parser.parse_args()
 
     model_type = args.model
     epochs = args.epochs
+    batch = args.batch
+    lr = args.lr
+    dropout = args.dropout
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = Path("runs") / f"cv_{model_type}_{stamp}"
@@ -136,7 +145,7 @@ def main():
 
     for test_fold in range(1, 11):
         val_fold = (test_fold % 10) + 1  # “próximo” fold
-        out = run_one_fold(model_type, test_fold, val_fold, epochs=epochs)
+        out = run_one_fold(model_type, test_fold, val_fold, epochs=epochs, batch=batch, lr=lr, dropout=dropout)
 
         # guardar por fold
         fold_path = out_dir / f"fold{test_fold}_metrics.json"

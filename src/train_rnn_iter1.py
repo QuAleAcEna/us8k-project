@@ -25,13 +25,15 @@ SR, DUR = 22050, 4.0
 N_MELS, N_FFT, HOP = 64, 1024, 512   # sequência ~173 passos 
 USE_DB = True                        # usar log-power 
 
-# Treino
-BATCH, EPOCHS, LR = 32, 15, 1e-3
+# Treino (pode ser sobreposto por env: RNN_BATCH, RNN_EPOCHS, RNN_LR, RNN_DROPOUT)
+BATCH   = int(os.getenv("RNN_BATCH", 32))
+EPOCHS  = int(os.getenv("RNN_EPOCHS", 15))
+LR      = float(os.getenv("RNN_LR", 1e-3))
 N_CLASSES = 10
 HIDDEN = 128
 N_LAYERS = 2
 BIDIR = True
-DROPOUT = 0.2
+DROPOUT = float(os.getenv("RNN_DROPOUT", 0.2))
 
 DEVICE = ("mps" if torch.backends.mps.is_available() else
           "cuda" if torch.cuda.is_available() else "cpu")
@@ -194,7 +196,7 @@ def main():
             "folds":{"train":TRAIN_FOLDS, "val":VAL_FOLD, "test":TEST_FOLD},
             "audio":{"sr":SR, "dur":DUR, "n_mels":N_MELS, "n_fft":N_FFT, "hop":HOP, "log_db":USE_DB},
             "model":{"type":"GRU","hidden":HIDDEN,"layers":N_LAYERS,"bidir":BIDIR,"dropout":DROPOUT},
-            "train":{"batch":BATCH,"epochs":EPOCHS,"lr":LR},
+            "train":{"batch":BATCH,"epochs":EPOCHS,"lr":LR,"dropout":DROPOUT},
             "device":DEVICE
         }
     }

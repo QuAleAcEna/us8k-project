@@ -25,8 +25,11 @@ SR, DUR = 22050, 4.0
 N_MELS, N_FFT, HOP = 64, 1024, 512
 USE_MFCC, N_MFCC = False, 40
 
-# treino
-BATCH, EPOCHS, LR = 32, 15, 1e-3
+# treino (pode ser sobreposto por env: CNN_BATCH, CNN_EPOCHS, CNN_LR, CNN_DROPOUT)
+BATCH   = int(os.getenv("CNN_BATCH", 32))
+EPOCHS  = int(os.getenv("CNN_EPOCHS", 15))
+LR      = float(os.getenv("CNN_LR", 1e-3))
+DROPOUT = float(os.getenv("CNN_DROPOUT", 0.3))
 N_CLASSES = 10
 
 # device 
@@ -47,7 +50,7 @@ config = {
     "dataset_root": ROOT, "csv": CSV,
     "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
     "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
-    "train": {"batch": BATCH, "epochs": EPOCHS, "lr": LR},
+    "train": {"batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT},
     "device": DEVICE, "seed": SEED, "model": "AudioCNN"
 }
 with open(OUT / "config.json", "w") as f: json.dump(config, f, indent=2)
@@ -88,7 +91,7 @@ class US8K(Dataset):
 
 # MODEL
 class AudioCNN(nn.Module):
-    def __init__(self, n_classes=10):
+    def __init__(self, n_classes=10, dropout=DROPOUT):
         super().__init__()
         self.fe = nn.Sequential(
             nn.Conv2d(1,16,3,padding=1), nn.BatchNorm2d(16), nn.ReLU(), nn.MaxPool2d(2),
@@ -98,7 +101,7 @@ class AudioCNN(nn.Module):
         )
         self.cls = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64,64), nn.ReLU(), nn.Dropout(0.3),
+            nn.Linear(64,64), nn.ReLU(), nn.Dropout(dropout),
             nn.Linear(64, n_classes)
         )
     def forward(self, x): return self.cls(self.fe(x))
