@@ -9,9 +9,13 @@ from dotenv import load_dotenv
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
 
-# Reutilizamos dataset e modelos existentes
-from train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn
-from train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn
+# Reutilizamos dataset e modelos existentes (import relativo para -m, fallback para execução direta)
+try:
+    from .train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn  # type: ignore
+    from .train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn  # type: ignore
+except ImportError:
+    from train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn
+    from train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn
 
 
 def pick_device() -> torch.device:

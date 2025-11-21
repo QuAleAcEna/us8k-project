@@ -1,0 +1,36 @@
+{
+  "dataset_root": "/home/dinis-cunha/Documents/uni/25-26/ACII/us8k-project/data/UrbanSound8K",
+  "csv": "/home/dinis-cunha/Documents/uni/25-26/ACII/us8k-project/data/UrbanSound8K/metadata/UrbanSound8K.csv",
+  "folds": {
+    "train": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "val": 10,
+    "test": 1
+  },
+  "audio": {
+    "sr": 22050,
+    "dur": 4.0,
+    "n_mels": 64,
+    "n_fft": 1024,
+    "hop": 512,
+    "use_mfcc": false,
+    "n_mfcc": 40
+  },
+  "train": {
+    "batch": 32,
+    "epochs": 15,
+    "lr": 0.001,
+    "dropout": 0.3
+  },
+  "device": "cuda",
+  "seed": 42,
+  "model": "AudioCNN"
+}

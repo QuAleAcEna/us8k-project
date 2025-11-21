@@ -5,18 +5,30 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # ---------- imports dos teus treinos ----------
-# CNN
-from train_iter1 import (
-    US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
-    BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
-    DEVICE as DEVICE_CNN
-)
-# RNN
-from train_rnn_iter1 import (
-    US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
-    BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
-    DEVICE as DEVICE_RNN
-)
+# CNN / RNN (tenta import relativo para execução com `python -m src.run_cv`)
+try:
+    from .train_iter1 import (  # type: ignore
+        US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
+        BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
+        DEVICE as DEVICE_CNN
+    )
+    from .train_rnn_iter1 import (  # type: ignore
+        US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
+        BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
+        DEVICE as DEVICE_RNN
+    )
+except ImportError:
+    # fallback para execução direta `python src/run_cv.py`
+    from train_iter1 import (
+        US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
+        BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
+        DEVICE as DEVICE_CNN
+    )
+    from train_rnn_iter1 import (
+        US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
+        BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
+        DEVICE as DEVICE_RNN
+    )
 
 # ---------- dataset meta ----------
 from dotenv import load_dotenv
