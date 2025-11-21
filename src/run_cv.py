@@ -150,6 +150,35 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     print(f"==> Guardar resultados em: {out_dir}")
 
+    # hiperparâmetros efetivamente usados nesta execução (para log)
+    if model_type == "cnn":
+        effective = {
+            "epochs": epochs or EPOCHS_CNN,
+            "batch": batch or BATCH_CNN,
+            "lr": lr or LR_CNN,
+            "dropout": dropout if dropout is not None else DROPOUT_CNN,
+            "device": DEVICE_CNN,
+        }
+    else:
+        effective = {
+            "epochs": epochs or EPOCHS_RNN,
+            "batch": batch or BATCH_RNN,
+            "lr": lr or LR_RNN,
+            "dropout": dropout if dropout is not None else DROPOUT_RNN,
+            "device": DEVICE_RNN,
+        }
+
+    config = {
+        "model": model_type,
+        "started_at": stamp,
+        "hyperparams": effective,
+        "folds": list(range(1, 11)),
+        "val_strategy": "val_fold = (test_fold % 10) + 1",
+        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout},
+    }
+    with open(out_dir / "config.json", "w") as f:
+        json.dump(config, f, indent=2)
+
     results = []
     # tamanho por classe (assumido igual para CNN/RNN)
     N_CLASSES = N_CLASSES_CNN if model_type=="cnn" else N_CLASSES_RNN
