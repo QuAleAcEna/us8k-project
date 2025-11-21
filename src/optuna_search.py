@@ -1,5 +1,6 @@
 import argparse
 import os
+from datetime import datetime
 from pathlib import Path
 
 import optuna
@@ -106,6 +107,7 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device):
 def main():
     load_dotenv()
     assert os.getenv("US8K_ROOT"), "Define US8K_ROOT no .env"
+    started_at = datetime.now().isoformat(timespec="seconds")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=["cnn", "rnn"], default="cnn")
@@ -136,6 +138,7 @@ def main():
         row = {
             "study": args.study_name,
             "model": args.model,
+            "started_at": started_at,
             "trial": trial.number,
             "state": trial.state.name,
             "value": trial.value,
