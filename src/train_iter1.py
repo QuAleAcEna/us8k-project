@@ -41,19 +41,12 @@ torch.manual_seed(SEED); np.random.seed(SEED)
 # pastas de saída
 RUNS_DIR = Path("runs")
 RUNS_DIR.mkdir(exist_ok=True)
-run_name = f"cnn_iter1_fold{TEST_FOLD}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-OUT = RUNS_DIR / run_name
-OUT.mkdir(parents=True, exist_ok=True)
 
-# salvar config usada
-config = {
-    "dataset_root": ROOT, "csv": CSV,
-    "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
-    "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
-    "train": {"batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT},
-    "device": DEVICE, "seed": SEED, "model": "AudioCNN"
-}
-with open(OUT / "config.json", "w") as f: json.dump(config, f, indent=2)
+def prepare_run_dir():
+    run_name = f"cnn_iter1_fold{TEST_FOLD}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    out = RUNS_DIR / run_name
+    out.mkdir(parents=True, exist_ok=True)
+    return out
 
 # DATASET
 class US8K(Dataset):
@@ -133,6 +126,17 @@ def run_epoch(model, loader, crit, opt=None):
 # MAIN
 def main():
     print("Device:", DEVICE)
+    OUT = prepare_run_dir()
+    # salvar config usada
+    config = {
+        "dataset_root": ROOT, "csv": CSV,
+        "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
+        "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
+        "train": {"batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT},
+        "device": DEVICE, "seed": SEED, "model": "AudioCNN"
+    }
+    with open(OUT / "config.json", "w") as f: json.dump(config, f, indent=2)
+
     tr_df, va_df, te_df = make_splits()
     print(f"Train={len(tr_df)} | Val={len(va_df)} | Test(fold{TEST_FOLD})={len(te_df)}")
 

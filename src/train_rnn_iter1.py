@@ -43,8 +43,11 @@ torch.manual_seed(SEED); np.random.seed(SEED)
 # Saída
 RUNS = Path("runs")
 RUNS.mkdir(exist_ok=True)
-RUN = RUNS / f"rnn_iter1_fold{TEST_FOLD}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-RUN.mkdir(parents=True, exist_ok=True)
+
+def prepare_run_dir():
+    run = RUNS / f"rnn_iter1_fold{TEST_FOLD}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    run.mkdir(parents=True, exist_ok=True)
+    return run
 
 # DATASET
 class US8KSeq(Dataset):
@@ -151,6 +154,7 @@ def run_epoch(model, loader, crit, opt=None):
 # MAIN
 def main():
     print("Device:", DEVICE)
+    RUN = prepare_run_dir()
     tr_df, va_df, te_df = make_splits()
     print(f"Train={len(tr_df)} | Val={len(va_df)} | Test(fold{TEST_FOLD})={len(te_df)}")
 
