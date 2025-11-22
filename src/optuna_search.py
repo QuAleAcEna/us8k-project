@@ -44,11 +44,10 @@ def build_model(model_type: str):
         return AudioGRU()
 
 
-def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device):
+def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, epochs: int):
     batch = trial.suggest_categorical("batch", [16, 32, 48, 64])
     lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
     dropout = trial.suggest_float("dropout", 0.1, 0.6)
-    epochs = trial.suggest_int("epochs", 4, 20)
 
     train_ds, val_ds = get_data(model_type)
     train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=0, pin_memory=True)
@@ -119,6 +118,7 @@ def main():
     parser.add_argument("--study-name", default="us8k_optuna")
     parser.add_argument("--storage", default=None, help="Ex: sqlite:///optuna.db para persistir")
     parser.add_argument("--csv", default="runs/optuna_results.csv", help="Ficheiro CSV para guardar cada trial")
+    parser.add_argument("--epochs", type=int, default=15, help="Número fixo de épocas (não otimizado pelo Optuna)")
     args = parser.parse_args()
 
     device = pick_device()
@@ -143,6 +143,7 @@ def main():
             "study": args.study_name,
             "model": args.model,
             "started_at": started_at,
+            "epochs": args.epochs,
             "trial": trial.number,
             "state": trial.state.name,
             "value": trial.value,
@@ -158,7 +159,7 @@ def main():
             writer.writerow(row)
 
     study.optimize(
-        lambda t: objective(t, args.model, device),
+        lambda t: objective(t, args.model, device, args.epochs),
         n_trials=args.trials,
         timeout=None,
         callbacks=[log_trial],
