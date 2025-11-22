@@ -47,6 +47,13 @@ Run from the project root:
   ```
 Each run creates `runs/<model>_iter1_fold1_<timestamp>/` with `config.json`, `history.csv`, `results.json`, `confusion_matrix.csv`, and the best checkpoint `model_best.pt`.
 
+### Overriding hyperparameters (env vars)
+You can override the defaults inline when running the single-fold scripts:
+```bash
+CNN_BATCH=48 CNN_EPOCHS=60 CNN_LR=0.0008 CNN_DROPOUT=0.35 CNN_PATIENCE=8 CNN_MIN_DELTA=0.0005 python -m src.train_iter1
+```
+Use the `RNN_*` equivalents for the GRU version.
+
 ## 10-Fold Cross-Validation
 Runs every fold (val fold is the next one cyclically) and aggregates confusion matrices:
 ```bash
