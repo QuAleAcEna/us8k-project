@@ -6,7 +6,7 @@ CNN and GRU baselines for UrbanSound8K. The repo includes single-fold training, 
 - `src/train_iter1.py` — mel-spectrogram CNN baseline (fold1 test, fold10 val).
 - `src/train_rnn_iter1.py` — mel-spectrogram GRU baseline (same folds as above).
 - `src/run_cv.py` — 10-fold cross-validation for either model type.
-- `src/optuna_search.py` — Optuna search over batch, lr, dropout, epochs for CNN/GRU.
+- `src/optuna_search.py` — Optuna search over batch, lr, dropout for CNN/GRU.
 - `src/plot_results.py`, `src/plot_rnn_results.py` — quick plots (acc/loss/CM) for a run.
 - `runs/` — outputs per run (config, histories, checkpoints, metrics, plots).
 - `report.ipynb` — analysis notebook (optional, not required to train).
@@ -26,13 +26,17 @@ CNN and GRU baselines for UrbanSound8K. The repo includes single-fold training, 
    US8K_ROOT=/path/to/UrbanSound8K
    # optional overrides
    CNN_BATCH=32
-   CNN_EPOCHS=15
+   CNN_EPOCHS=50
    CNN_LR=0.001
    CNN_DROPOUT=0.3
+   CNN_PATIENCE=7
+   CNN_MIN_DELTA=0.001
    RNN_BATCH=32
    RNN_EPOCHS=15
    RNN_LR=0.001
    RNN_DROPOUT=0.2
+   RNN_PATIENCE=7
+   RNN_MIN_DELTA=0.001
    ```
 
 ## Quickstart Training
@@ -64,7 +68,7 @@ python -m src.run_cv --model cnn --epochs 12 --batch 48 --lr 0.0008 --dropout 0.
 Outputs are stored under `runs/cv_<model>_<timestamp>/` with per-fold JSONs, `summary.csv/json`, and a cumulative CM plot.
 
 ## Hyperparameter Search (Optuna)
-Bayesian search over batch size, learning rate, dropout, and epochs:
+Bayesian search over batch size, learning rate, dropout; epochs are fixed via `--epochs` (default 15):
 ```bash
 python -m src.optuna_search --model cnn --trials 30 \
   --study-name us8k_cnn --storage sqlite:///optuna.db \
