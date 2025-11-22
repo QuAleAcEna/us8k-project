@@ -126,7 +126,7 @@ def main():
     parser.add_argument("--study-name", default="us8k_optuna")
     parser.add_argument("--storage", default=None, help="Ex: sqlite:///optuna.db para persistir")
     parser.add_argument("--csv", default="runs/optuna_results.csv", help="Ficheiro CSV para guardar cada trial")
-    parser.add_argument("--epochs", type=int, default=15, help="Número fixo de épocas (não otimizado pelo Optuna)")
+    parser.add_argument("--epochs", type=int, default=12, help="Número fixo de épocas (não otimizado pelo Optuna)")
     args = parser.parse_args()
 
     device = pick_device()
