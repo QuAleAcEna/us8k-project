@@ -27,9 +27,11 @@ USE_MFCC, N_MFCC = False, 40
 
 # treino (pode ser sobreposto por env: CNN_BATCH, CNN_EPOCHS, CNN_LR, CNN_DROPOUT)
 BATCH   = int(os.getenv("CNN_BATCH", 32))
-EPOCHS  = int(os.getenv("CNN_EPOCHS", 15))
+EPOCHS  = int(os.getenv("CNN_EPOCHS", 50))
 LR      = float(os.getenv("CNN_LR", 1e-3))
 DROPOUT = float(os.getenv("CNN_DROPOUT", 0.3))
+PATIENCE = int(os.getenv("CNN_PATIENCE", 7))             # early stopping patience (epochs)
+MIN_DELTA = float(os.getenv("CNN_MIN_DELTA", 1e-3))      # min loss improvement to reset patience
 N_CLASSES = 10
 
 # device 
@@ -132,7 +134,10 @@ def main():
         "dataset_root": ROOT, "csv": CSV,
         "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
         "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
-        "train": {"batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT},
+        "train": {
+            "batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT,
+            "early_stopping": {"monitor": "val_loss", "patience": PATIENCE, "min_delta": MIN_DELTA}
+        },
         "device": DEVICE, "seed": SEED, "model": "AudioCNN"
     }
     with open(OUT / "config.json", "w") as f: json.dump(config, f, indent=2)
@@ -154,7 +159,9 @@ def main():
     with open(hist_csv, "w", newline="") as f:
         w = csv.writer(f); w.writerow(["epoch","train_acc","train_loss","val_acc","val_loss"])
 
-    best_va, best = -1, None
+    best = None
+    best_metrics = {"val_loss": float("inf"), "val_acc": 0.0}
+    wait = 0
     for ep in range(1, EPOCHS+1):
         tr_loss, tr_acc, _ = run_epoch(model, tr_dl, crit, opt)
         va_loss, va_acc, _ = run_epoch(model, va_dl, crit)
@@ -164,10 +171,17 @@ def main():
         with open(hist_csv, "a", newline="") as f:
             w = csv.writer(f); w.writerow([ep, tr_acc, tr_loss, va_acc, va_loss])
 
-        # checkpoint do melhor val
-        if va_acc > best_va:
-            best_va, best = va_acc, {k: v.cpu() for k, v in model.state_dict().items()}
+        # checkpoint do melhor val (monitoriza loss)
+        if va_loss + MIN_DELTA < best_metrics["val_loss"]:
+            best_metrics = {"val_loss": va_loss, "val_acc": va_acc}
+            best = {k: v.cpu() for k, v in model.state_dict().items()}
             torch.save(best, OUT / "model_best.pt")
+            wait = 0
+        else:
+            wait += 1
+            if wait >= PATIENCE:
+                print(f"Early stopping: sem melhoria de val_loss por {PATIENCE} épocas (min_delta={MIN_DELTA})")
+                break
 
     # carrega melhor antes de testar
     if best: model.load_state_dict({k: v.to(DEVICE) for k, v in best.items()})
@@ -181,7 +195,7 @@ def main():
     # guarda métricas finais
     out_json = {
         "test": {"acc": float(te_acc), "loss": float(te_loss)},
-        "best_val_acc": float(best_va),
+        "best_val": {"acc": float(best_metrics["val_acc"]), "loss": float(best_metrics["val_loss"])},
         "confusion_matrix": cm.tolist(),
         "classification_report": rep
     }
