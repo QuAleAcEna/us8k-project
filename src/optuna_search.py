@@ -17,6 +17,9 @@ except ImportError:
     from train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn
     from train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn
 
+PATIENCE = int(os.getenv("OPTUNA_PATIENCE", 7))
+MIN_DELTA = float(os.getenv("OPTUNA_MIN_DELTA", 1e-3))
+
 
 def pick_device() -> torch.device:
     if torch.backends.mps.is_available():
@@ -48,6 +51,8 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, 
     batch = trial.suggest_categorical("batch", [16, 32, 48, 64])
     lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
     dropout = trial.suggest_float("dropout", 0.1, 0.6)
+    patience = PATIENCE
+    min_delta = MIN_DELTA
 
     train_ds, val_ds = get_data(model_type)
     train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=0, pin_memory=True)
@@ -63,7 +68,8 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, 
     crit = torch.nn.CrossEntropyLoss()
 
     best_val = 0.0
-    patience, waited = 2, 0
+    best_loss = float("inf")
+    waited = 0
 
     for epoch in range(epochs):
         model.train()
@@ -79,27 +85,29 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, 
         # validação
         model.eval()
         preds, gts = [], []
+        val_losses = []
         with torch.no_grad():
             for xb, yb in val_dl:
                 xb = xb.to(device, non_blocking=True)
                 yb = torch.as_tensor(yb, device=device, dtype=torch.long)
                 logits = model(xb)
+                val_losses.append(crit(logits, yb).item())
                 preds.extend(logits.argmax(1).cpu().tolist())
                 gts.extend(yb.cpu().tolist())
 
+        val_loss = float(sum(val_losses) / len(val_losses))
         acc = accuracy_score(gts, preds)
         trial.report(acc, epoch)
         best_val = max(best_val, acc)
 
-        # early stopping se sem ganho
-        if epoch == 0:
-            continue
-        if acc + 1e-3 < best_val:
+        # early stopping baseado em val_loss
+        if val_loss + min_delta < best_loss:
+            best_loss = val_loss
+            waited = 0
+        else:
             waited += 1
             if waited >= patience:
                 break
-        else:
-            waited = 0
 
         if trial.should_prune():
             raise optuna.TrialPruned()
