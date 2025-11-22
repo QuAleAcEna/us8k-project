@@ -37,8 +37,7 @@ N_LAYERS = 2
 BIDIR = True
 DROPOUT = float(os.getenv("RNN_DROPOUT", 0.2))
 
-DEVICE = ("mps" if torch.backends.mps.is_available() else
-          "cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = ("mps" if torch.backends.mps.is_available() else "cpu")
 SEED = 42
 torch.manual_seed(SEED); np.random.seed(SEED)
 
