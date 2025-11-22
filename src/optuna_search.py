@@ -5,6 +5,7 @@ from pathlib import Path
 
 import optuna
 import torch
+from tqdm import tqdm
 from dotenv import load_dotenv
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
@@ -17,8 +18,17 @@ except ImportError:
     from train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn
     from train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn
 
+PATIENCE = int(os.getenv("OPTUNA_PATIENCE", 7))
+MIN_DELTA = float(os.getenv("OPTUNA_MIN_DELTA", 1e-3))
 
-def pick_device() -> torch.device:
+
+def pick_device(model_type: str) -> torch.device:
+    # Para GRU em sistemas ROCm, evita CUDA para fugir a falhas de compilação MIOpen
+    if model_type == "rnn":
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+    # CNN segue ordem normal
     if torch.backends.mps.is_available():
         return torch.device("mps")
     if torch.cuda.is_available():
@@ -44,15 +54,23 @@ def build_model(model_type: str):
         return AudioGRU()
 
 
-def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device):
+def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, epochs: int):
     batch = trial.suggest_categorical("batch", [16, 32, 48, 64])
     lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
     dropout = trial.suggest_float("dropout", 0.1, 0.6)
-    epochs = trial.suggest_int("epochs", 4, 20)
+    patience = PATIENCE
+    min_delta = MIN_DELTA
 
     train_ds, val_ds = get_data(model_type)
-    train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=0, pin_memory=True)
-    val_dl = DataLoader(val_ds, batch_size=batch, shuffle=False, num_workers=0, pin_memory=True)
+
+    if device == torch.device("mps"):
+        num_workers = 0
+    else:
+        num_workers = 4
+        
+    # num_workers=0 para evitar chatices no macOS com librosa
+    train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=num_workers, pin_memory=True)
+    val_dl = DataLoader(val_ds, batch_size=batch, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     model = build_model(model_type).to(device)
     # aplica dropout customizado para CNN head ou emb RNN
@@ -64,9 +82,10 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device):
     crit = torch.nn.CrossEntropyLoss()
 
     best_val = 0.0
-    patience, waited = 2, 0
+    best_loss = float("inf")
+    waited = 0
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc=f"Trial {trial.number}", unit="epoch", leave=False):
         model.train()
         for xb, yb in train_dl:
             xb = xb.to(device, non_blocking=True)
@@ -80,27 +99,29 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device):
         # validação
         model.eval()
         preds, gts = [], []
+        val_losses = []
         with torch.no_grad():
             for xb, yb in val_dl:
                 xb = xb.to(device, non_blocking=True)
                 yb = torch.as_tensor(yb, device=device, dtype=torch.long)
                 logits = model(xb)
+                val_losses.append(crit(logits, yb).item())
                 preds.extend(logits.argmax(1).cpu().tolist())
                 gts.extend(yb.cpu().tolist())
 
+        val_loss = float(sum(val_losses) / len(val_losses))
         acc = accuracy_score(gts, preds)
         trial.report(acc, epoch)
         best_val = max(best_val, acc)
 
-        # early stopping se sem ganho
-        if epoch == 0:
-            continue
-        if acc + 1e-3 < best_val:
+        # early stopping baseado em val_loss
+        if val_loss + min_delta < best_loss:
+            best_loss = val_loss
+            waited = 0
+        else:
             waited += 1
             if waited >= patience:
                 break
-        else:
-            waited = 0
 
         if trial.should_prune():
             raise optuna.TrialPruned()
@@ -119,9 +140,10 @@ def main():
     parser.add_argument("--study-name", default="us8k_optuna")
     parser.add_argument("--storage", default=None, help="Ex: sqlite:///optuna.db para persistir")
     parser.add_argument("--csv", default="runs/optuna_results.csv", help="Ficheiro CSV para guardar cada trial")
+    parser.add_argument("--epochs", type=int, default=12, help="Número fixo de épocas (não otimizado pelo Optuna)")
     args = parser.parse_args()
 
-    device = pick_device()
+    device = pick_device(args.model)
     print(f"Device: {device}")
 
     sampler = optuna.samplers.TPESampler(seed=42)
@@ -143,6 +165,7 @@ def main():
             "study": args.study_name,
             "model": args.model,
             "started_at": started_at,
+            "epochs": args.epochs,
             "trial": trial.number,
             "state": trial.state.name,
             "value": trial.value,
@@ -158,7 +181,7 @@ def main():
             writer.writerow(row)
 
     study.optimize(
-        lambda t: objective(t, args.model, device),
+        lambda t: objective(t, args.model, device, args.epochs),
         n_trials=args.trials,
         timeout=None,
         callbacks=[log_trial],

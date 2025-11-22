@@ -29,14 +29,15 @@ USE_DB = True                        # usar log-power
 BATCH   = int(os.getenv("RNN_BATCH", 32))
 EPOCHS  = int(os.getenv("RNN_EPOCHS", 15))
 LR      = float(os.getenv("RNN_LR", 1e-3))
+PATIENCE = int(os.getenv("RNN_PATIENCE", 7))             # early stopping patience (epochs)
+MIN_DELTA = float(os.getenv("RNN_MIN_DELTA", 1e-3))      # min val loss improvement
 N_CLASSES = 10
 HIDDEN = 128
 N_LAYERS = 2
 BIDIR = True
 DROPOUT = float(os.getenv("RNN_DROPOUT", 0.2))
 
-DEVICE = ("mps" if torch.backends.mps.is_available() else
-          "cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = ("mps" if torch.backends.mps.is_available() else "cpu")
 SEED = 42
 torch.manual_seed(SEED); np.random.seed(SEED)
 
@@ -158,11 +159,16 @@ def main():
     tr_df, va_df, te_df = make_splits()
     print(f"Train={len(tr_df)} | Val={len(va_df)} | Test(fold{TEST_FOLD})={len(te_df)}")
 
-    tr_dl = DataLoader(US8KSeq(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=0,
+    if DEVICE == "mps":
+        num_workers = 0
+    else:
+        num_workers = 4 
+    # num_workers=0 para evitar chatices no macOS com librosa
+    tr_dl = DataLoader(US8KSeq(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=num_workers,
                        pin_memory=True, collate_fn=collate_pad)
-    va_dl = DataLoader(US8KSeq(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0,
+    va_dl = DataLoader(US8KSeq(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers,
                        pin_memory=True, collate_fn=collate_pad)
-    te_dl = DataLoader(US8KSeq(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0,
+    te_dl = DataLoader(US8KSeq(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers,
                        pin_memory=True, collate_fn=collate_pad)
 
     model = AudioGRU().to(DEVICE)
@@ -174,16 +180,26 @@ def main():
     with open(hist_csv, "w", newline="") as f:
         csv.writer(f).writerow(["epoch","train_acc","train_loss","val_acc","val_loss"])
 
-    best_va, best = -1, None
+    best = None
+    best_metrics = {"val_loss": float("inf"), "val_acc": 0.0}
+    wait = 0
     for ep in range(1, EPOCHS+1):
         tr_loss, tr_acc, _ = run_epoch(model, tr_dl, crit, opt)
         va_loss, va_acc, _ = run_epoch(model, va_dl, crit)
         print(f"Epoch {ep:02d} | train {tr_acc:.3f}/{tr_loss:.3f} | val {va_acc:.3f}/{va_loss:.3f}")
         with open(hist_csv, "a", newline="") as f:
             csv.writer(f).writerow([ep, tr_acc, tr_loss, va_acc, va_loss])
-        if va_acc > best_va:
-            best_va, best = va_acc, {k:v.cpu() for k,v in model.state_dict().items()}
+        # monitoriza val_loss para early stopping e checkpoint
+        if va_loss + MIN_DELTA < best_metrics["val_loss"]:
+            best_metrics = {"val_loss": va_loss, "val_acc": va_acc}
+            best = {k:v.cpu() for k,v in model.state_dict().items()}
             torch.save(best, RUN / "model_best.pt")
+            wait = 0
+        else:
+            wait += 1
+            if wait >= PATIENCE:
+                print(f"Early stopping: sem melhoria de val_loss por {PATIENCE} épocas (min_delta={MIN_DELTA})")
+                break
 
     if best: model.load_state_dict({k:v.to(DEVICE) for k,v in best.items()})
     te_loss, te_acc, (gts, preds) = run_epoch(model, te_dl, crit)
@@ -193,14 +209,17 @@ def main():
 
     out = {
         "test":{"acc":float(te_acc), "loss":float(te_loss)},
-        "best_val_acc": float(best_va),
+        "best_val": {"acc": float(best_metrics["val_acc"]), "loss": float(best_metrics["val_loss"])},
         "confusion_matrix": cm.tolist(),
         "classification_report": rep,
         "config":{
             "folds":{"train":TRAIN_FOLDS, "val":VAL_FOLD, "test":TEST_FOLD},
             "audio":{"sr":SR, "dur":DUR, "n_mels":N_MELS, "n_fft":N_FFT, "hop":HOP, "log_db":USE_DB},
             "model":{"type":"GRU","hidden":HIDDEN,"layers":N_LAYERS,"bidir":BIDIR,"dropout":DROPOUT},
-            "train":{"batch":BATCH,"epochs":EPOCHS,"lr":LR,"dropout":DROPOUT},
+            "train":{
+                "batch":BATCH,"epochs":EPOCHS,"lr":LR,"dropout":DROPOUT,
+                "early_stopping":{"monitor":"val_loss","patience":PATIENCE,"min_delta":MIN_DELTA}
+            },
             "device":DEVICE
         }
     }

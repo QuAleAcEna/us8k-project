@@ -1,0 +1,37 @@
+{
+  "model": "cnn",
+  "started_at": "20251122-224117",
+  "hyperparams": {
+    "epochs": 50,
+    "batch": 16,
+    "lr": 0.0007,
+    "dropout": 0.29,
+    "device": "cuda",
+    "early_stopping": {
+      "monitor": "val_loss",
+      "patience": 7,
+      "min_delta": 0.001
+    }
+  },
+  "folds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "val_strategy": "val_fold = (test_fold % 10) + 1",
+  "opt_overrides": {
+    "epochs": null,
+    "batch": 16,
+    "lr": 0.0007,
+    "dropout": 0.29,
+    "patience": null,
+    "min_delta": null
+  }
+}
