@@ -62,8 +62,15 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, 
     min_delta = MIN_DELTA
 
     train_ds, val_ds = get_data(model_type)
-    train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=0, pin_memory=True)
-    val_dl = DataLoader(val_ds, batch_size=batch, shuffle=False, num_workers=0, pin_memory=True)
+
+    if device == torch.device("mps"):
+        num_workers = 0
+    else:
+        num_workers = 4
+        
+    # num_workers=0 para evitar chatices no macOS com librosa
+    train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=num_workers, pin_memory=True)
+    val_dl = DataLoader(val_ds, batch_size=batch, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     model = build_model(model_type).to(device)
     # aplica dropout customizado para CNN head ou emb RNN

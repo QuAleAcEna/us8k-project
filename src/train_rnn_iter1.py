@@ -159,11 +159,16 @@ def main():
     tr_df, va_df, te_df = make_splits()
     print(f"Train={len(tr_df)} | Val={len(va_df)} | Test(fold{TEST_FOLD})={len(te_df)}")
 
-    tr_dl = DataLoader(US8KSeq(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=0,
+    if DEVICE == "mps":
+        num_workers = 0
+    else:
+        num_workers = 4 
+    # num_workers=0 para evitar chatices no macOS com librosa
+    tr_dl = DataLoader(US8KSeq(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=num_workers,
                        pin_memory=True, collate_fn=collate_pad)
-    va_dl = DataLoader(US8KSeq(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0,
+    va_dl = DataLoader(US8KSeq(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers,
                        pin_memory=True, collate_fn=collate_pad)
-    te_dl = DataLoader(US8KSeq(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0,
+    te_dl = DataLoader(US8KSeq(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers,
                        pin_memory=True, collate_fn=collate_pad)
 
     model = AudioGRU().to(DEVICE)
