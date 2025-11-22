@@ -5,6 +5,7 @@ from pathlib import Path
 
 import optuna
 import torch
+from tqdm import tqdm
 from dotenv import load_dotenv
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
@@ -71,7 +72,7 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, 
     best_loss = float("inf")
     waited = 0
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc=f"Trial {trial.number}", unit="epoch", leave=False):
         model.train()
         for xb, yb in train_dl:
             xb = xb.to(device, non_blocking=True)
