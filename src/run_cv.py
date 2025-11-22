@@ -10,11 +10,13 @@ try:
     from .train_iter1 import (  # type: ignore
         US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
         BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
+        PATIENCE as PATIENCE_CNN, MIN_DELTA as MIN_DELTA_CNN,
         DEVICE as DEVICE_CNN
     )
     from .train_rnn_iter1 import (  # type: ignore
         US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
         BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
+        PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN,
         DEVICE as DEVICE_RNN
     )
 except ImportError:
@@ -22,11 +24,13 @@ except ImportError:
     from train_iter1 import (
         US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
         BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
+        PATIENCE as PATIENCE_CNN, MIN_DELTA as MIN_DELTA_CNN,
         DEVICE as DEVICE_CNN
     )
     from train_rnn_iter1 import (
         US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
         BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
+        PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN,
         DEVICE as DEVICE_RNN
     )
 
@@ -46,7 +50,8 @@ def make_splits_for(test_fold:int, val_fold:int):
     return tr, va, te
 
 def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
-                 batch:int=None, lr:float=None, dropout:float=None):
+                 batch:int=None, lr:float=None, dropout:float=None,
+                 patience:int=None, min_delta:float=None):
     """
     Treina e avalia num fold:
       - model_type: "cnn" ou "rnn"
@@ -63,6 +68,8 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         BATCH     = batch or BATCH_CNN
         LR        = lr or LR_CNN
         DROPOUT   = dropout if dropout is not None else DROPOUT_CNN
+        PATIENCE  = patience or PATIENCE_CNN
+        MIN_DELTA = min_delta if min_delta is not None else MIN_DELTA_CNN
         N_CLASSES = N_CLASSES_CNN
         DEVICE    = DEVICE_CNN
     elif model_type == "rnn":
@@ -71,6 +78,8 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         BATCH     = batch or BATCH_RNN
         LR        = lr or LR_RNN
         DROPOUT   = dropout if dropout is not None else DROPOUT_RNN
+        PATIENCE  = patience or PATIENCE_RNN
+        MIN_DELTA = min_delta if min_delta is not None else MIN_DELTA_RNN
         N_CLASSES = N_CLASSES_RNN
         DEVICE    = DEVICE_RNN
     else:
@@ -105,13 +114,22 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
             gts   += yb.detach().cpu().tolist()
         return float(np.mean(losses)), accuracy_score(gts, preds), (gts, preds)
 
-    best_va, best_state = -1, None
+    best_state = None
+    best_metrics = {"val_loss": float("inf"), "val_acc": 0.0}
+    wait = 0
     for ep in range(1, epochs+1):
         tr_loss, tr_acc, _ = run_epoch(tr_dl, train=True)
         va_loss, va_acc, _ = run_epoch(va_dl, train=False)
         print(f"[{model_type.upper()} | fold{test_fold}] Epoch {ep:02d} | train {tr_acc:.3f}/{tr_loss:.3f} | val {va_acc:.3f}/{va_loss:.3f}")
-        if va_acc > best_va:
-            best_va, best_state = va_acc, {k:v.cpu() for k,v in model.state_dict().items()}
+        if va_loss + MIN_DELTA < best_metrics["val_loss"]:
+            best_metrics = {"val_loss": va_loss, "val_acc": va_acc}
+            best_state = {k:v.cpu() for k,v in model.state_dict().items()}
+            wait = 0
+        else:
+            wait += 1
+            if wait >= PATIENCE:
+                print(f"[{model_type.upper()} | fold{test_fold}] Early stopping (patience={PATIENCE}, min_delta={MIN_DELTA})")
+                break
 
     if best_state:
         model.load_state_dict({k:v.to(DEVICE) for k,v in best_state.items()})
@@ -125,7 +143,8 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         "val_fold": val_fold,
         "test_acc": float(te_acc),
         "test_loss": float(te_loss),
-        "val_best_acc": float(best_va),
+        "val_best_acc": float(best_metrics["val_acc"]),
+        "val_best_loss": float(best_metrics["val_loss"]),
         "report": rep,
         "cm": cm
     }
@@ -137,6 +156,8 @@ def main():
     parser.add_argument("--batch", type=int, default=None, help="Override de batch size")
     parser.add_argument("--lr", type=float, default=None, help="Override de learning rate")
     parser.add_argument("--dropout", type=float, default=None, help="Override de dropout")
+    parser.add_argument("--patience", type=int, default=None, help="Override de early stopping patience")
+    parser.add_argument("--min-delta", type=float, default=None, help="Override de melhoria mínima de val_loss")
     args = parser.parse_args()
 
     model_type = args.model
@@ -144,6 +165,8 @@ def main():
     batch = args.batch
     lr = args.lr
     dropout = args.dropout
+    patience = args.patience
+    min_delta = args.min_delta
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = Path("runs") / f"cv_{model_type}_{stamp}"
@@ -158,6 +181,7 @@ def main():
             "lr": lr or LR_CNN,
             "dropout": dropout if dropout is not None else DROPOUT_CNN,
             "device": DEVICE_CNN,
+            "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_CNN, "min_delta": min_delta if min_delta is not None else MIN_DELTA_CNN},
         }
     else:
         effective = {
@@ -166,6 +190,7 @@ def main():
             "lr": lr or LR_RNN,
             "dropout": dropout if dropout is not None else DROPOUT_RNN,
             "device": DEVICE_RNN,
+            "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_RNN, "min_delta": min_delta if min_delta is not None else MIN_DELTA_RNN},
         }
 
     config = {
@@ -174,7 +199,7 @@ def main():
         "hyperparams": effective,
         "folds": list(range(1, 11)),
         "val_strategy": "val_fold = (test_fold % 10) + 1",
-        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout},
+        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout, "patience": patience, "min_delta": min_delta},
     }
     with open(out_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2)
@@ -186,7 +211,11 @@ def main():
 
     for test_fold in range(1, 11):
         val_fold = (test_fold % 10) + 1  # “próximo” fold
-        out = run_one_fold(model_type, test_fold, val_fold, epochs=epochs, batch=batch, lr=lr, dropout=dropout)
+        out = run_one_fold(
+            model_type, test_fold, val_fold,
+            epochs=epochs, batch=batch, lr=lr, dropout=dropout,
+            patience=patience, min_delta=min_delta
+        )
 
         # guardar por fold
         fold_path = out_dir / f"fold{test_fold}_metrics.json"
