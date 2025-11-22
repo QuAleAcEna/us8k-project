@@ -22,7 +22,13 @@ PATIENCE = int(os.getenv("OPTUNA_PATIENCE", 7))
 MIN_DELTA = float(os.getenv("OPTUNA_MIN_DELTA", 1e-3))
 
 
-def pick_device() -> torch.device:
+def pick_device(model_type: str) -> torch.device:
+    # Para GRU em sistemas ROCm, evita CUDA para fugir a falhas de compilação MIOpen
+    if model_type == "rnn":
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+    # CNN segue ordem normal
     if torch.backends.mps.is_available():
         return torch.device("mps")
     if torch.cuda.is_available():
@@ -130,7 +136,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=12, help="Número fixo de épocas (não otimizado pelo Optuna)")
     args = parser.parse_args()
 
-    device = pick_device()
+    device = pick_device(args.model)
     print(f"Device: {device}")
 
     sampler = optuna.samplers.TPESampler(seed=42)
