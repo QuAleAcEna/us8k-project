@@ -89,11 +89,14 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         epochs = EPOCHS_CNN if model_type == "cnn" else EPOCHS_RNN
 
     tr_df, va_df, te_df = make_splits_for(test_fold, val_fold)
-
+    if DEVICE == "mps":
+        num_workers = 0
+    else:
+        num_workers = 4
     # num_workers=0 para evitar chatices no macOS com librosa
-    tr_dl = DataLoader(Dataset(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=0, pin_memory=True)
-    va_dl = DataLoader(Dataset(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0, pin_memory=True)
-    te_dl = DataLoader(Dataset(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=0, pin_memory=True)
+    tr_dl = DataLoader(Dataset(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=num_workers, pin_memory=True)
+    va_dl = DataLoader(Dataset(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
+    te_dl = DataLoader(Dataset(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     model = Model(dropout=DROPOUT).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
