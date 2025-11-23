@@ -29,6 +29,8 @@ USE_DB = True
 
 # Treino 
 BATCH, EPOCHS, LR = 32, 15, 1e-3
+PATIENCE = int(os.getenv("RNN2_PATIENCE", 7))             # early stopping patience (épocas)
+MIN_DELTA = float(os.getenv("RNN2_MIN_DELTA", 1e-3))      # melhoria mínima em val_loss
 N_CLASSES = 10
 
 # MODELO
@@ -37,8 +39,7 @@ N_LAYERS = 2
 BIDIR = True
 DROPOUT = 0.3          
 
-DEVICE = ("mps" if torch.backends.mps.is_available() else
-          "cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = ("mps" if torch.backends.mps.is_available()  else "cpu")
 SEED = 42
 torch.manual_seed(SEED); np.random.seed(SEED)
 
@@ -219,16 +220,26 @@ def main():
     with open(hist_csv, "w", newline="") as f:
         csv.writer(f).writerow(["epoch","train_acc","train_loss","val_acc","val_loss"])
 
-    best_va, best = -1, None
+    best = None
+    best_metrics = {"val_loss": float("inf"), "val_acc": 0.0}
+    wait = 0
     for ep in range(1, EPOCHS+1):
         tr_loss, tr_acc, _ = run_epoch(model, tr_dl, crit, opt)
         va_loss, va_acc, _ = run_epoch(model, va_dl, crit)
         print(f"Epoch {ep:02d} | train {tr_acc:.3f}/{tr_loss:.3f} | val {va_acc:.3f}/{va_loss:.3f}")
         with open(hist_csv, "a", newline="") as f:
             csv.writer(f).writerow([ep, tr_acc, tr_loss, va_acc, va_loss])
-        if va_acc > best_va:
-            best_va, best = va_acc, {k:v.cpu() for k,v in model.state_dict().items()}
+        # early stopping com tolerância (monitoriza val_loss)
+        if va_loss + MIN_DELTA < best_metrics["val_loss"]:
+            best_metrics = {"val_loss": va_loss, "val_acc": va_acc}
+            best = {k:v.cpu() for k,v in model.state_dict().items()}
             torch.save(best, RUN / "model_best.pt")
+            wait = 0
+        else:
+            wait += 1
+            if wait >= PATIENCE:
+                print(f"Early stopping: sem melhoria de val_loss por {PATIENCE} épocas (min_delta={MIN_DELTA})")
+                break
 
     if best:
         model.load_state_dict({k:v.to(DEVICE) for k,v in best.items()})
@@ -239,14 +250,17 @@ def main():
 
     out = {
         "test":{"acc":float(te_acc), "loss":float(te_loss)},
-        "best_val_acc": float(best_va),
+        "best_val": {"acc": float(best_metrics["val_acc"]), "loss": float(best_metrics["val_loss"])},
         "confusion_matrix": cm.tolist(),
         "classification_report": rep,
         "config":{
             "folds":{"train":TRAIN_FOLDS, "val":VAL_FOLD, "test":TEST_FOLD},
             "audio":{"sr":SR, "dur":DUR, "n_mels":N_MELS, "n_fft":N_FFT, "hop":HOP, "log_db":USE_DB},
             "model":{"type":"GRU","hidden":HIDDEN,"layers":N_LAYERS,"bidir":BIDIR,"dropout":DROPOUT},
-            "train":{"batch":BATCH,"epochs":EPOCHS,"lr":LR},
+            "train":{
+                "batch":BATCH,"epochs":EPOCHS,"lr":LR,
+                "early_stopping":{"monitor":"val_loss","patience":PATIENCE,"min_delta":MIN_DELTA}
+            },
             "device":DEVICE
         }
     }
@@ -259,4 +273,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
