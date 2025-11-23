@@ -27,7 +27,7 @@ USE_DB = True                        # usar log-power
 
 # Treino (pode ser sobreposto por env: RNN_BATCH, RNN_EPOCHS, RNN_LR, RNN_DROPOUT)
 BATCH   = int(os.getenv("RNN_BATCH", 32))
-EPOCHS  = int(os.getenv("RNN_EPOCHS", 15))
+EPOCHS  = int(os.getenv("RNN_EPOCHS", 50))
 LR      = float(os.getenv("RNN_LR", 1e-3))
 PATIENCE = int(os.getenv("RNN_PATIENCE", 7))             # early stopping patience (epochs)
 MIN_DELTA = float(os.getenv("RNN_MIN_DELTA", 1e-3))      # min val loss improvement
