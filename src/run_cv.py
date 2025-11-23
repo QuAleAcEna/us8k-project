@@ -16,7 +16,7 @@ try:
     from .train_rnn_iter1 import (  # type: ignore
         US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
         BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
-        PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN,
+        PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN, HIDDEN as HIDDEN_RNN, N_LAYERS as N_LAYERS_RNN, BIDIR as BIDIR_RNN,
         DEVICE as DEVICE_RNN
     )
 
@@ -31,7 +31,7 @@ except ImportError:
     from train_rnn_iter1 import (
         US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
         BATCH as BATCH_RNN, EPOCHS as EPOCHS_RNN, LR as LR_RNN, DROPOUT as DROPOUT_RNN,
-        PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN,
+        PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN, HIDDEN as HIDDEN_RNN, N_LAYERS as N_LAYERS_RNN, BIDIR as BIDIR_RNN,
         DEVICE as DEVICE_RNN
     )
 
@@ -53,7 +53,7 @@ def make_splits_for(test_fold:int, val_fold:int):
 
 def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
                  batch:int=None, lr:float=None, dropout:float=None,
-                 patience:int=None, min_delta:float=None):
+                 patience:int=None, min_delta:float=None, hidden:int=None, layers:int=None):
     """
     Treina e avalia num fold:
       - model_type: "cnn" ou "rnn"
@@ -82,6 +82,9 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         DROPOUT   = dropout if dropout is not None else DROPOUT_RNN
         PATIENCE  = patience or PATIENCE_RNN
         MIN_DELTA = min_delta if min_delta is not None else MIN_DELTA_RNN
+        HIDDEN    = hidden or HIDDEN_RNN
+        N_LAYERS  = layers or N_LAYERS_RNN
+        BIDIR     = BIDIR_RNN
         N_CLASSES = N_CLASSES_RNN
         DEVICE    = DEVICE_RNN
 
@@ -104,7 +107,10 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
     va_dl = DataLoader(Dataset(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
     te_dl = DataLoader(Dataset(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
 
-    model = Model(dropout=DROPOUT).to(DEVICE)
+    if model_type == "rnn":
+        model = Model(hidden=HIDDEN, n_layers=N_LAYERS, bidir=BIDIR, dropout=DROPOUT, n_classes=N_CLASSES).to(DEVICE)
+    else:
+        model = Model(dropout=DROPOUT).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
     opt   = torch.optim.Adam(model.parameters(), lr=LR)
 
@@ -167,6 +173,8 @@ def main():
     parser.add_argument("--dropout", type=float, default=None, help="Override de dropout")
     parser.add_argument("--patience", type=int, default=None, help="Override de early stopping patience")
     parser.add_argument("--min-delta", type=float, default=None, help="Override de melhoria mínima de val_loss")
+    parser.add_argument("--hidden", type=int, default=None, help="Override do tamanho do hidden (só RNN)")
+    parser.add_argument("--layers", type=int, default=None, help="Override do nº de camadas GRU (só RNN)")
     args = parser.parse_args()
 
     model_type = args.model
@@ -176,6 +184,8 @@ def main():
     dropout = args.dropout
     patience = args.patience
     min_delta = args.min_delta
+    hidden = args.hidden
+    layers = args.layers
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = Path("runs") / f"cv_{model_type}_{stamp}"
@@ -198,6 +208,9 @@ def main():
             "batch": batch or BATCH_RNN,
             "lr": lr or LR_RNN,
             "dropout": dropout if dropout is not None else DROPOUT_RNN,
+            "hidden": hidden or HIDDEN_RNN,
+            "layers": layers or N_LAYERS_RNN,
+            "bidir": BIDIR_RNN,
             "device": DEVICE_RNN,
             "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_RNN, "min_delta": min_delta if min_delta is not None else MIN_DELTA_RNN},
         }
@@ -209,7 +222,7 @@ def main():
         "hyperparams": effective,
         "folds": list(range(1, 11)),
         "val_strategy": "val_fold = (test_fold % 10) + 1",
-        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout, "patience": patience, "min_delta": min_delta},
+        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout, "patience": patience, "min_delta": min_delta, "hidden": hidden, "layers": layers},
     }
     with open(out_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2)
@@ -224,7 +237,7 @@ def main():
         out = run_one_fold(
             model_type, test_fold, val_fold,
             epochs=epochs, batch=batch, lr=lr, dropout=dropout,
-            patience=patience, min_delta=min_delta
+            patience=patience, min_delta=min_delta, hidden=hidden, layers=layers
         )
 
         # guardar por fold
