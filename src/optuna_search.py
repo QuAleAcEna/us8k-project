@@ -14,9 +14,11 @@ from torch.utils.data import DataLoader
 try:
     from .train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn  # type: ignore
     from .train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn  # type: ignore
+    from .train_rnn_iter1_2 import US8KSeq as US8K_RNN2, AudioGRU as AudioGRU2, make_splits as make_splits_rnn2  # type: ignore
 except ImportError:
     from train_iter1 import US8K as US8K_CNN, AudioCNN, make_splits as make_splits_cnn
     from train_rnn_iter1 import US8KSeq as US8K_RNN, AudioGRU, make_splits as make_splits_rnn
+    from train_rnn_iter1_2 import US8KSeq as US8K_RNN2, AudioGRU as AudioGRU2, make_splits as make_splits_rnn2
 
 PATIENCE = int(os.getenv("OPTUNA_PATIENCE", 7))
 MIN_DELTA = float(os.getenv("OPTUNA_MIN_DELTA", 1e-3))
@@ -24,7 +26,7 @@ MIN_DELTA = float(os.getenv("OPTUNA_MIN_DELTA", 1e-3))
 
 def pick_device(model_type: str) -> torch.device:
     # Para GRU em sistemas ROCm, evita CUDA para fugir a falhas de compilação MIOpen
-    if model_type == "rnn":
+    if model_type in ("rnn", "rnn2"):
         if torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
@@ -43,15 +45,22 @@ def get_data(model_type: str):
     elif model_type == "rnn":
         tr_df, va_df, _ = make_splits_rnn()
         return US8K_RNN(tr_df, augment=True), US8K_RNN(va_df, augment=False)
+    elif model_type == "rnn2":
+        tr_df, va_df, _ = make_splits_rnn2()
+        return US8K_RNN2(tr_df, augment=True), US8K_RNN2(va_df, augment=False)
     else:
-        raise ValueError("model_type deve ser 'cnn' ou 'rnn'")
+        raise ValueError("model_type deve ser 'cnn', 'rnn' ou 'rnn2'")
 
 
 def build_model(model_type: str):
     if model_type == "cnn":
         return AudioCNN()
-    else:
+    elif model_type == "rnn":
         return AudioGRU()
+    elif model_type == "rnn2":
+        return AudioGRU2()
+    else:
+        raise ValueError("model_type deve ser 'cnn', 'rnn' ou 'rnn2'")
 
 
 def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, epochs: int):
@@ -135,7 +144,7 @@ def main():
     started_at = datetime.now().isoformat(timespec="seconds")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["cnn", "rnn"], default="cnn")
+    parser.add_argument("--model", choices=["cnn", "rnn", "rnn2"], default="cnn")
     parser.add_argument("--trials", type=int, default=20)
     parser.add_argument("--study-name", default="us8k_optuna")
     parser.add_argument("--storage", default=None, help="Ex: sqlite:///optuna.db para persistir")
