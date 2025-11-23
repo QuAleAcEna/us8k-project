@@ -19,12 +19,7 @@ try:
         PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN,
         DEVICE as DEVICE_RNN
     )
-    from .train_rnn_iter1_2 import (  # type: ignore
-        US8KSeq as US8K_RNN2, AudioGRU as AudioGRU2, N_CLASSES as N_CLASSES_RNN2,
-        BATCH as BATCH_RNN2, EPOCHS as EPOCHS_RNN2, LR as LR_RNN2, DROPOUT as DROPOUT_RNN2,
-        PATIENCE as PATIENCE_RNN2, MIN_DELTA as MIN_DELTA_RNN2,
-        DEVICE as DEVICE_RNN2
-    )
+
 except ImportError:
     # fallback para execução direta `python src/run_cv.py`
     from train_iter1 import (
@@ -39,12 +34,7 @@ except ImportError:
         PATIENCE as PATIENCE_RNN, MIN_DELTA as MIN_DELTA_RNN,
         DEVICE as DEVICE_RNN
     )
-    from train_rnn_iter1_2 import (
-        US8KSeq as US8K_RNN2, AudioGRU as AudioGRU2, N_CLASSES as N_CLASSES_RNN2,
-        BATCH as BATCH_RNN2, EPOCHS as EPOCHS_RNN2, LR as LR_RNN2, DROPOUT as DROPOUT_RNN2,
-        PATIENCE as PATIENCE_RNN2, MIN_DELTA as MIN_DELTA_RNN2,
-        DEVICE as DEVICE_RNN2
-    )
+
 
 # ---------- dataset meta ----------
 from dotenv import load_dotenv
@@ -94,26 +84,15 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         MIN_DELTA = min_delta if min_delta is not None else MIN_DELTA_RNN
         N_CLASSES = N_CLASSES_RNN
         DEVICE    = DEVICE_RNN
-    elif model_type == "rnn2":
-        Dataset   = US8K_RNN2
-        Model     = AudioGRU2
-        BATCH     = batch or BATCH_RNN2
-        LR        = lr or LR_RNN2
-        DROPOUT   = dropout if dropout is not None else DROPOUT_RNN2
-        PATIENCE  = patience or PATIENCE_RNN2
-        MIN_DELTA = min_delta if min_delta is not None else MIN_DELTA_RNN2
-        N_CLASSES = N_CLASSES_RNN2
-        DEVICE    = DEVICE_RNN2
+
     else:
-        raise ValueError("model_type deve ser 'cnn', 'rnn' ou 'rnn2'")
+        raise ValueError("model_type deve ser 'cnn', 'rnn'")
 
     if epochs is None:
         if model_type == "cnn":
             epochs = EPOCHS_CNN
-        elif model_type == "rnn" or model_type == "rnn2":
+        elif model_type == "rnn" :
             epochs = EPOCHS_RNN
-        else:
-            epochs = EPOCHS_RNN2
 
     tr_df, va_df, te_df = make_splits_for(test_fold, val_fold)
     if DEVICE == "mps":
@@ -181,7 +160,7 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["cnn","rnn","rnn2"], required=True, help="Qual modelo correr para 10 folds (rnn2 usa train_rnn_iter1_2)")
+    parser.add_argument("--model", choices=["cnn","rnn"], required=True, help="Qual modelo correr para 10 folds")
     parser.add_argument("--epochs", type=int, default=None, help="Override de epochs (senão usa os do treino original)")
     parser.add_argument("--batch", type=int, default=None, help="Override de batch size")
     parser.add_argument("--lr", type=float, default=None, help="Override de learning rate")
@@ -222,15 +201,7 @@ def main():
             "device": DEVICE_RNN,
             "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_RNN, "min_delta": min_delta if min_delta is not None else MIN_DELTA_RNN},
         }
-    else:
-        effective = {
-            "epochs": epochs or EPOCHS_RNN2,
-            "batch": batch or BATCH_RNN2,
-            "lr": lr or LR_RNN2,
-            "dropout": dropout if dropout is not None else DROPOUT_RNN2,
-            "device": DEVICE_RNN2,
-            "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_RNN2, "min_delta": min_delta if min_delta is not None else MIN_DELTA_RNN2},
-        }
+
 
     config = {
         "model": model_type,
@@ -245,7 +216,7 @@ def main():
 
     results = []
     # tamanho por classe (assumido igual para CNN/RNN)
-    N_CLASSES = N_CLASSES_CNN if model_type=="cnn" else (N_CLASSES_RNN if model_type=="rnn" else N_CLASSES_RNN2)
+    N_CLASSES = N_CLASSES_CNN if model_type=="cnn" else N_CLASSES_RNN 
     cm_sum = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
 
     for test_fold in range(1, 11):
