@@ -25,17 +25,17 @@ SR, DUR = 22050, 4.0
 N_MELS, N_FFT, HOP = 64, 1024, 512   # sequência ~173 passos 
 USE_DB = True                        # usar log-power 
 
-# Treino (pode ser sobreposto por env: RNN_BATCH, RNN_EPOCHS, RNN_LR, RNN_DROPOUT)
-BATCH   = int(os.getenv("RNN_BATCH", 32))
-EPOCHS  = int(os.getenv("RNN_EPOCHS", 50))
-LR      = float(os.getenv("RNN_LR", 1e-3))
+# Treino (pode ser sobreposto por env: RNN_BATCH, RNN_EPOCHS, RNN_LR, RNN_DROPOUT, RNN_HIDDEN, RNN_LAYERS)
+BATCH    = int(os.getenv("RNN_BATCH", 32))
+EPOCHS   = int(os.getenv("RNN_EPOCHS", 50))
+LR       = float(os.getenv("RNN_LR", 1e-3))
 PATIENCE = int(os.getenv("RNN_PATIENCE", 7))             # early stopping patience (epochs)
 MIN_DELTA = float(os.getenv("RNN_MIN_DELTA", 1e-3))      # min val loss improvement
 N_CLASSES = 10
-HIDDEN = 128
-N_LAYERS = 2
-BIDIR = True
-DROPOUT = float(os.getenv("RNN_DROPOUT", 0.2))
+HIDDEN   = int(os.getenv("RNN_HIDDEN", 128))
+N_LAYERS = int(os.getenv("RNN_LAYERS", 2))
+BIDIR    = True
+DROPOUT  = float(os.getenv("RNN_DROPOUT", 0.2))
 
 DEVICE = ("mps" if torch.backends.mps.is_available() else "cpu")
 SEED = 42
