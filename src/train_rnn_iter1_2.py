@@ -200,6 +200,21 @@ def main():
     tr_df, va_df, te_df = make_splits()
     print(f"Train={len(tr_df)} | Val={len(va_df)} | Test(fold{TEST_FOLD})={len(te_df)}")
 
+    # guardar config usada (paridade com 1ª iteração da CNN)
+    config = {
+        "dataset_root": ROOT, "csv": CSV,
+        "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
+        "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "log_db": USE_DB},
+        "model": {"type": "GRU", "hidden": HIDDEN, "layers": N_LAYERS, "bidir": BIDIR, "dropout": DROPOUT},
+        "train": {
+            "batch": BATCH, "epochs": EPOCHS, "lr": LR,
+            "early_stopping": {"monitor": "val_loss", "patience": PATIENCE, "min_delta": MIN_DELTA}
+        },
+        "device": DEVICE, "seed": SEED
+    }
+    with open(RUN / "config.json", "w") as f:
+        json.dump(config, f, indent=2)
+
     if DEVICE == "mps":
         num_workers = 0
     else:
