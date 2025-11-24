@@ -1,11 +1,14 @@
 {
   "model": "rnn",
-  "started_at": "20251123-131624",
+  "started_at": "20251124-160637",
   "hyperparams": {
     "epochs": 50,
     "batch": 16,
     "lr": 0.0013,
     "dropout": 0.15,
+    "hidden": 128,
+    "layers": 2,
+    "bidir": true,
     "device": "cpu",
     "early_stopping": {
       "monitor": "val_loss",
@@ -32,6 +35,8 @@
     "lr": 0.0013,
     "dropout": 0.15,
     "patience": null,
-    "min_delta": null
+    "min_delta": null,
+    "hidden": null,
+    "layers": null
   }
 }
