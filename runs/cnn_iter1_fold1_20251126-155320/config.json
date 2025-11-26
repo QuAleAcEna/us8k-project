@@ -25,10 +25,10 @@
     "n_mfcc": 40
   },
   "train": {
-    "batch": 16,
+    "batch": 32,
     "epochs": 50,
-    "lr": 0.0003,
-    "dropout": 0.36,
+    "lr": 0.001,
+    "dropout": 0.3,
     "early_stopping": {
       "monitor": "val_loss",
       "patience": 7,
