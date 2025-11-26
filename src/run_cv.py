@@ -232,8 +232,9 @@ def main():
     N_CLASSES = N_CLASSES_CNN if model_type=="cnn" else N_CLASSES_RNN 
     cm_sum = np.zeros((N_CLASSES, N_CLASSES), dtype=int)
 
+    test_val_dict = {1:10, 2:1, 3:2, 4:3, 5:4, 6:5, 7:6, 8:7, 9:8, 10:9}
     for test_fold in range(1, 11):
-        val_fold = (test_fold % 10) + 1  # “próximo” fold
+        val_fold = test_val_dict[test_fold] # “próximo” fold
         out = run_one_fold(
             model_type, test_fold, val_fold,
             epochs=epochs, batch=batch, lr=lr, dropout=dropout,
