@@ -64,9 +64,24 @@ class US8K(Dataset):
         target = int(SR * DUR)
         y = np.pad(y, (0, max(0, target - len(y))))[:target]
         if self.augment:
-            if np.random.rand() < 0.3: y = y * np.random.uniform(0.8, 1.2)  # ganho
-            if np.random.rand() < 0.3: y = y + 0.004 * np.random.randn(len(y))  # ruído
+            if np.random.rand() < 0.1: y = y * np.random.uniform(0.8, 1.2)  # ganho
+            if np.random.rand() < 0.1: y = y + 0.001 * np.random.randn(len(y))  # ruído
         return y
+
+    def _spec_augment(self, F, time_masks=2, freq_masks=2, max_time=10, max_freq=8):
+        F = F.copy()
+        n_mels, n_frames = F.shape
+        for _ in range(freq_masks):
+            width = np.random.randint(0, max_freq + 1)
+            if width == 0 or width >= n_mels: continue
+            start = np.random.randint(0, n_mels - width + 1)
+            F[start:start + width, :] = 0.0
+        for _ in range(time_masks):
+            width = np.random.randint(0, max_time + 1)
+            if width == 0 or width >= n_frames: continue
+            start = np.random.randint(0, n_frames - width + 1)
+            F[:, start:start + width] = 0.0
+        return F
 
     def _feat(self, y):
         if USE_MFCC:
@@ -75,6 +90,8 @@ class US8K(Dataset):
             S = librosa.feature.melspectrogram(y=y, sr=SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP)
             F = librosa.power_to_db(S, ref=np.max)
         F = librosa.util.normalize(F).astype(np.float32)    # (freq,time)
+        if self.augment:
+            F = self._spec_augment(F)
         return torch.from_numpy(F).unsqueeze(0)             # (1,f,t)
 
     def __getitem__(self, i):
