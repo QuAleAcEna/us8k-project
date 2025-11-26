@@ -25,6 +25,14 @@ SR, DUR = 22050, 4.0
 N_MELS, N_FFT, HOP = 64, 1024, 512
 USE_MFCC, N_MFCC = False, 40
 
+# SpecAugment (default off; enable via env SPEC_AUG=1)
+SPEC_AUG = bool(int(os.getenv("SPEC_AUG", 0)))
+SPEC_AUG_PROB = float(os.getenv("SPEC_AUG_PROB", 0.25))
+SPEC_AUG_TIME_MASKS = int(os.getenv("SPEC_AUG_TIME_MASKS", 1))
+SPEC_AUG_FREQ_MASKS = int(os.getenv("SPEC_AUG_FREQ_MASKS", 1))
+SPEC_AUG_MAX_TIME = int(os.getenv("SPEC_AUG_MAX_TIME", 6))
+SPEC_AUG_MAX_FREQ = int(os.getenv("SPEC_AUG_MAX_FREQ", 6))
+
 # treino (pode ser sobreposto por env: CNN_BATCH, CNN_EPOCHS, CNN_LR, CNN_DROPOUT)
 BATCH   = int(os.getenv("CNN_BATCH", 32))
 EPOCHS  = int(os.getenv("CNN_EPOCHS", 50))
@@ -68,16 +76,16 @@ class US8K(Dataset):
             if np.random.rand() < 0.3: y = y + 0.004 * np.random.randn(len(y))  # ruído
         return y
 
-    def _spec_augment(self, F, time_masks=2, freq_masks=2, max_time=10, max_freq=8):
+    def _spec_augment(self, F):
         F = F.copy()
         n_mels, n_frames = F.shape
-        for _ in range(freq_masks):
-            width = np.random.randint(0, max_freq + 1)
+        for _ in range(SPEC_AUG_FREQ_MASKS):
+            width = np.random.randint(0, SPEC_AUG_MAX_FREQ + 1)
             if width == 0 or width >= n_mels: continue
             start = np.random.randint(0, n_mels - width + 1)
             F[start:start + width, :] = 0.0
-        for _ in range(time_masks):
-            width = np.random.randint(0, max_time + 1)
+        for _ in range(SPEC_AUG_TIME_MASKS):
+            width = np.random.randint(0, SPEC_AUG_MAX_TIME + 1)
             if width == 0 or width >= n_frames: continue
             start = np.random.randint(0, n_frames - width + 1)
             F[:, start:start + width] = 0.0
@@ -90,9 +98,8 @@ class US8K(Dataset):
             S = librosa.feature.melspectrogram(y=y, sr=SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP)
             F = librosa.power_to_db(S, ref=np.max)
         F = librosa.util.normalize(F).astype(np.float32)    # (freq,time)
-        if self.augment:
-            #F = self._spec_augment(F) nao funcuionou bem
-            pass
+        if self.augment and SPEC_AUG and (np.random.rand() < SPEC_AUG_PROB):
+            F = self._spec_augment(F)
         return torch.from_numpy(F).unsqueeze(0)             # (1,f,t)
 
     def __getitem__(self, i):
@@ -152,6 +159,14 @@ def main():
         "dataset_root": ROOT, "csv": CSV,
         "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
         "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
+        "augment": {
+            "wave": {"gain_prob": 0.3, "noise_prob": 0.3},
+            "specaugment": {
+                "enabled": SPEC_AUG, "prob": SPEC_AUG_PROB,
+                "time_masks": SPEC_AUG_TIME_MASKS, "freq_masks": SPEC_AUG_FREQ_MASKS,
+                "max_time": SPEC_AUG_MAX_TIME, "max_freq": SPEC_AUG_MAX_FREQ
+            }
+        },
         "train": {
             "batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT,
             "early_stopping": {"monitor": "val_loss", "patience": PATIENCE, "min_delta": MIN_DELTA}

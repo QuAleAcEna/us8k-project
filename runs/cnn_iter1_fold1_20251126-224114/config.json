@@ -24,6 +24,20 @@
     "use_mfcc": false,
     "n_mfcc": 40
   },
+  "augment": {
+    "wave": {
+      "gain_prob": 0.3,
+      "noise_prob": 0.3
+    },
+    "specaugment": {
+      "enabled": true,
+      "prob": 0.25,
+      "time_masks": 1,
+      "freq_masks": 1,
+      "max_time": 6,
+      "max_freq": 6
+    }
+  },
   "train": {
     "batch": 32,
     "epochs": 50,
