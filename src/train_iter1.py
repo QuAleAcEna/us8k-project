@@ -64,8 +64,8 @@ class US8K(Dataset):
         target = int(SR * DUR)
         y = np.pad(y, (0, max(0, target - len(y))))[:target]
         if self.augment:
-            if np.random.rand() < 0.1: y = y * np.random.uniform(0.8, 1.2)  # ganho
-            if np.random.rand() < 0.1: y = y + 0.001 * np.random.randn(len(y))  # ruído
+            if np.random.rand() < 0.3: y = y * np.random.uniform(0.8, 1.2)  # ganho
+            if np.random.rand() < 0.3: y = y + 0.004 * np.random.randn(len(y))  # ruído
         return y
 
     def _spec_augment(self, F, time_masks=2, freq_masks=2, max_time=10, max_freq=8):
@@ -91,7 +91,8 @@ class US8K(Dataset):
             F = librosa.power_to_db(S, ref=np.max)
         F = librosa.util.normalize(F).astype(np.float32)    # (freq,time)
         if self.augment:
-            F = self._spec_augment(F)
+            #F = self._spec_augment(F) nao funcuionou bem
+            pass
         return torch.from_numpy(F).unsqueeze(0)             # (1,f,t)
 
     def __getitem__(self, i):
@@ -166,7 +167,7 @@ def main():
     else:
         num_workers = 0
     # num_workers=0 
-    tr_dl = DataLoader(US8K(tr_df, augment=False),  batch_size=BATCH, shuffle=True,  num_workers=num_workers, pin_memory=True)
+    tr_dl = DataLoader(US8K(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=num_workers, pin_memory=True)
     va_dl = DataLoader(US8K(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
     te_dl = DataLoader(US8K(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
 
