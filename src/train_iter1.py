@@ -166,7 +166,7 @@ def main():
     else:
         num_workers = 0
     # num_workers=0 
-    tr_dl = DataLoader(US8K(tr_df, augment=True),  batch_size=BATCH, shuffle=True,  num_workers=num_workers, pin_memory=True)
+    tr_dl = DataLoader(US8K(tr_df, augment=False),  batch_size=BATCH, shuffle=True,  num_workers=num_workers, pin_memory=True)
     va_dl = DataLoader(US8K(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
     te_dl = DataLoader(US8K(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
 
