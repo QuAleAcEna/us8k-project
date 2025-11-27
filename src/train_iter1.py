@@ -25,6 +25,11 @@ SR, DUR = 22050, 4.0
 N_MELS, N_FFT, HOP = 64, 1024, 512
 USE_MFCC, N_MFCC = False, 40
 
+# Mixup (default on for treino)
+MIXUP = bool(int(os.getenv("CNN_MIXUP", 1))) # enable via env CNN_MIXUP=1 or disable via CNN_MIXUP=0
+MIXUP_ALPHA = float(os.getenv("CNN_MIXUP_ALPHA", 0.3))
+MIXUP_PROB = float(os.getenv("CNN_MIXUP_PROB", 1.0))
+
 # SpecAugment (default off; enable via env SPEC_AUG=1)
 SPEC_AUG = bool(int(os.getenv("SPEC_AUG", 0)))
 SPEC_AUG_PROB = float(os.getenv("SPEC_AUG_PROB", 0.25))
@@ -135,6 +140,16 @@ def make_splits():
     te = meta[meta.fold == TEST_FOLD]
     return tr, va, te
 
+def mixup_data(x, y, alpha):
+    lam = np.random.beta(alpha, alpha) if alpha > 0 else 1.0
+    idx = torch.randperm(x.size(0), device=x.device)
+    mixed_x = lam * x + (1 - lam) * x[idx]
+    y_a, y_b = y, y[idx]
+    return mixed_x, y_a, y_b, lam
+
+def mixup_criterion(crit, preds, y_a, y_b, lam):
+    return lam * crit(preds, y_a) + (1 - lam) * crit(preds, y_b)
+
 def run_epoch(model, loader, crit, opt=None):
     train = opt is not None
     model.train(train)
@@ -142,13 +157,20 @@ def run_epoch(model, loader, crit, opt=None):
     for xb, yb in tqdm(loader, desc="train" if train else "eval", leave=False):
         xb = xb.to(DEVICE, non_blocking=True)
         yb = torch.as_tensor(yb, device=DEVICE, dtype=torch.long)
+        use_mixup = train and MIXUP and (np.random.rand() < MIXUP_PROB)
+        orig_yb = yb
+        if use_mixup:
+            xb, yb_a, yb_b, lam = mixup_data(xb, yb, MIXUP_ALPHA)
         logits = model(xb)
-        loss = crit(logits, yb)
+        if train and use_mixup:
+            loss = mixup_criterion(crit, logits, yb_a, yb_b, lam)
+        else:
+            loss = crit(logits, yb)
         if train:
             opt.zero_grad(); loss.backward(); opt.step()
         losses.append(loss.item())
         preds += logits.argmax(1).detach().cpu().tolist()
-        gts   += yb.detach().cpu().tolist()
+        gts   += orig_yb.detach().cpu().tolist()
     return float(np.mean(losses)), accuracy_score(gts, preds), (gts, preds)
 
 # MAIN
@@ -166,7 +188,8 @@ def main():
                 "enabled": SPEC_AUG, "prob": SPEC_AUG_PROB,
                 "time_masks": SPEC_AUG_TIME_MASKS, "freq_masks": SPEC_AUG_FREQ_MASKS,
                 "max_time": SPEC_AUG_MAX_TIME, "max_freq": SPEC_AUG_MAX_FREQ
-            }
+            },
+            "mixup": {"enabled": MIXUP, "alpha": MIXUP_ALPHA, "prob": MIXUP_PROB}
         },
         "train": {
             "batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT, "weight_decay": WEIGHT_DECAY,
