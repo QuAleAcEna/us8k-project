@@ -26,7 +26,7 @@ N_MELS, N_FFT, HOP = 64, 1024, 512
 USE_MFCC, N_MFCC = False, 40
 
 # Time shift/crop no waveform
-SHIFT_PROB = float(os.getenv("CNN_SHIFT_PROB", 0.7))
+SHIFT_PROB = float(os.getenv("CNN_SHIFT_PROB", 0.7)) #desativado via env CNN_SHIFT_PROB=0
 SHIFT_MAX_SEC = float(os.getenv("CNN_SHIFT_MAX_SEC", 0.5))  # deslocamento máximo em segundos
 
 # Mixup (default on for treino)
@@ -133,15 +133,15 @@ class AudioCNN(nn.Module):
     def __init__(self, n_classes=10, dropout=DROPOUT):
         super().__init__()
         self.fe = nn.Sequential(
-            nn.Conv2d(1,16,3,padding=1), nn.BatchNorm2d(16), nn.ReLU(), nn.MaxPool2d(2),
-            nn.Conv2d(16,32,3,padding=1), nn.BatchNorm2d(32), nn.ReLU(), nn.MaxPool2d(2),
-            nn.Conv2d(32,64,3,padding=1), nn.BatchNorm2d(64), nn.ReLU(),
+            nn.Conv2d(1,12,3,padding=1), nn.BatchNorm2d(12), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(12,24,3,padding=1), nn.BatchNorm2d(24), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(24,48,3,padding=1), nn.BatchNorm2d(48), nn.ReLU(),
             nn.AdaptiveAvgPool2d((1,1))
         )
         self.cls = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(64,64), nn.ReLU(), nn.Dropout(dropout),
-            nn.Linear(64, n_classes)
+            nn.Linear(48,48), nn.ReLU(), nn.Dropout(dropout),
+            nn.Linear(48, n_classes)
         )
     def forward(self, x): return self.cls(self.fe(x))
 

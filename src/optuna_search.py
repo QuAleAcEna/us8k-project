@@ -72,7 +72,7 @@ def objective(trial: optuna.trial.Trial, model_type: str, device: torch.device, 
     if device == torch.device("mps"):
         num_workers = 0
     else:
-        num_workers = 4
+        num_workers = 6
         
     # num_workers=0 para evitar chatices no macOS com librosa
     train_dl = DataLoader(train_ds, batch_size=batch, shuffle=True, num_workers=num_workers, pin_memory=True)
