@@ -25,8 +25,12 @@ SR, DUR = 22050, 4.0
 N_MELS, N_FFT, HOP = 64, 1024, 512
 USE_MFCC, N_MFCC = False, 40
 
+# Time shift/crop no waveform
+SHIFT_PROB = float(os.getenv("CNN_SHIFT_PROB", 0.7))
+SHIFT_MAX_SEC = float(os.getenv("CNN_SHIFT_MAX_SEC", 0.5))  # deslocamento máximo em segundos
+
 # Mixup (default on for treino)
-MIXUP = bool(int(os.getenv("CNN_MIXUP", 1))) # enable via env CNN_MIXUP=1 or disable via CNN_MIXUP=0
+MIXUP = bool(int(os.getenv("CNN_MIXUP", 0))) # enable via env CNN_MIXUP=1 or disable via CNN_MIXUP=0 (bad results)
 MIXUP_ALPHA = float(os.getenv("CNN_MIXUP_ALPHA", 0.3))
 MIXUP_PROB = float(os.getenv("CNN_MIXUP_PROB", 1.0))
 
@@ -76,7 +80,16 @@ class US8K(Dataset):
         path = os.path.join(ROOT, "audio", f"fold{row.fold}", row.slice_file_name)
         y, _ = librosa.load(path, sr=SR, mono=True)
         target = int(SR * DUR)
-        y = np.pad(y, (0, max(0, target - len(y))))[:target]
+        y = np.pad(y, (0, max(0, target - len(y))))  # garantir comprimento mínimo
+        if self.augment and np.random.rand() < SHIFT_PROB:
+            max_shift = int(SHIFT_MAX_SEC * SR)
+            shift = np.random.randint(-max_shift, max_shift + 1)
+            if shift > 0:
+                y = np.pad(y, (shift, 0))[:len(y)]
+            elif shift < 0:
+                y = np.pad(y, (0, -shift))
+                y = y[-shift:len(y)-shift]
+        y = y[:target]
         if self.augment:
             if np.random.rand() < 0.3: y = y * np.random.uniform(0.8, 1.2)  # ganho
             if np.random.rand() < 0.3: y = y + 0.004 * np.random.randn(len(y))  # ruído
@@ -183,7 +196,7 @@ def main():
         "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
         "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
         "augment": {
-            "wave": {"gain_prob": 0.3, "noise_prob": 0.3},
+            "wave": {"gain_prob": 0.3, "noise_prob": 0.3, "shift_prob": SHIFT_PROB, "shift_max_sec": SHIFT_MAX_SEC},
             "specaugment": {
                 "enabled": SPEC_AUG, "prob": SPEC_AUG_PROB,
                 "time_masks": SPEC_AUG_TIME_MASKS, "freq_masks": SPEC_AUG_FREQ_MASKS,
