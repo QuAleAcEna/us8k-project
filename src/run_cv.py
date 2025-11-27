@@ -11,7 +11,12 @@ try:
         US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
         BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
         PATIENCE as PATIENCE_CNN, MIN_DELTA as MIN_DELTA_CNN,
-        DEVICE as DEVICE_CNN
+        DEVICE as DEVICE_CNN, WEIGHT_DECAY as WEIGHT_DECAY_CNN,
+        MIXUP as MIXUP_CNN, MIXUP_ALPHA as MIXUP_ALPHA_CNN, MIXUP_PROB as MIXUP_PROB_CNN,
+        SHIFT_PROB as SHIFT_PROB_CNN, SHIFT_MAX_SEC as SHIFT_MAX_SEC_CNN,
+        SPEC_AUG as SPEC_AUG_CNN, SPEC_AUG_PROB as SPEC_AUG_PROB_CNN,
+        SPEC_AUG_TIME_MASKS as SPEC_AUG_TIME_MASKS_CNN, SPEC_AUG_FREQ_MASKS as SPEC_AUG_FREQ_MASKS_CNN,
+        SPEC_AUG_MAX_TIME as SPEC_AUG_MAX_TIME_CNN, SPEC_AUG_MAX_FREQ as SPEC_AUG_MAX_FREQ_CNN
     )
     from .train_rnn_iter1 import (  # type: ignore
         US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
@@ -26,7 +31,12 @@ except ImportError:
         US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
         BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
         PATIENCE as PATIENCE_CNN, MIN_DELTA as MIN_DELTA_CNN,
-        DEVICE as DEVICE_CNN
+        DEVICE as DEVICE_CNN, WEIGHT_DECAY as WEIGHT_DECAY_CNN,
+        MIXUP as MIXUP_CNN, MIXUP_ALPHA as MIXUP_ALPHA_CNN, MIXUP_PROB as MIXUP_PROB_CNN,
+        SHIFT_PROB as SHIFT_PROB_CNN, SHIFT_MAX_SEC as SHIFT_MAX_SEC_CNN,
+        SPEC_AUG as SPEC_AUG_CNN, SPEC_AUG_PROB as SPEC_AUG_PROB_CNN,
+        SPEC_AUG_TIME_MASKS as SPEC_AUG_TIME_MASKS_CNN, SPEC_AUG_FREQ_MASKS as SPEC_AUG_FREQ_MASKS_CNN,
+        SPEC_AUG_MAX_TIME as SPEC_AUG_MAX_TIME_CNN, SPEC_AUG_MAX_FREQ as SPEC_AUG_MAX_FREQ_CNN
     )
     from train_rnn_iter1 import (
         US8KSeq as US8K_RNN, AudioGRU, N_CLASSES as N_CLASSES_RNN,
@@ -53,7 +63,7 @@ def make_splits_for(test_fold:int, val_fold:int):
 
 def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
                  batch:int=None, lr:float=None, dropout:float=None,
-                 patience:int=None, min_delta:float=None, hidden:int=None, layers:int=None):
+                 patience:int=None, min_delta:float=None, hidden:int=None, layers:int=None, weight_decay:float=None):
     """
     Treina e avalia num fold:
       - model_type: "cnn" ou "rnn"
@@ -70,6 +80,7 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
         BATCH     = batch or BATCH_CNN
         LR        = lr or LR_CNN
         DROPOUT   = dropout if dropout is not None else DROPOUT_CNN
+        WEIGHT_DECAY = weight_decay if weight_decay is not None else WEIGHT_DECAY_CNN
         PATIENCE  = patience or PATIENCE_CNN
         MIN_DELTA = min_delta if min_delta is not None else MIN_DELTA_CNN
         N_CLASSES = N_CLASSES_CNN
@@ -112,7 +123,7 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
     else:
         model = Model(dropout=DROPOUT).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
-    opt   = torch.optim.Adam(model.parameters(), lr=LR)
+    opt   = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
     def run_epoch(dl, train=False):
         model.train(train)
@@ -173,6 +184,7 @@ def main():
     parser.add_argument("--dropout", type=float, default=None, help="Override de dropout")
     parser.add_argument("--patience", type=int, default=None, help="Override de early stopping patience")
     parser.add_argument("--min-delta", type=float, default=None, help="Override de melhoria mínima de val_loss")
+    parser.add_argument("--weight-decay", type=float, default=None, help="Override de weight decay (só CNN)")
     parser.add_argument("--hidden", type=int, default=None, help="Override do tamanho do hidden (só RNN)")
     parser.add_argument("--layers", type=int, default=None, help="Override do nº de camadas GRU (só RNN)")
     args = parser.parse_args()
@@ -184,6 +196,7 @@ def main():
     dropout = args.dropout
     patience = args.patience
     min_delta = args.min_delta
+    weight_decay = args.weight_decay
     hidden = args.hidden
     layers = args.layers
 
@@ -199,6 +212,14 @@ def main():
             "batch": batch or BATCH_CNN,
             "lr": lr or LR_CNN,
             "dropout": dropout if dropout is not None else DROPOUT_CNN,
+            "weight_decay": weight_decay if weight_decay is not None else WEIGHT_DECAY_CNN,
+            "mixup": {"enabled": MIXUP_CNN, "alpha": MIXUP_ALPHA_CNN, "prob": MIXUP_PROB_CNN},
+            "wave_shift": {"prob": SHIFT_PROB_CNN, "max_sec": SHIFT_MAX_SEC_CNN},
+            "specaugment": {
+                "enabled": SPEC_AUG_CNN, "prob": SPEC_AUG_PROB_CNN,
+                "time_masks": SPEC_AUG_TIME_MASKS_CNN, "freq_masks": SPEC_AUG_FREQ_MASKS_CNN,
+                "max_time": SPEC_AUG_MAX_TIME_CNN, "max_freq": SPEC_AUG_MAX_FREQ_CNN
+            },
             "device": DEVICE_CNN,
             "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_CNN, "min_delta": min_delta if min_delta is not None else MIN_DELTA_CNN},
         }
@@ -222,7 +243,7 @@ def main():
         "hyperparams": effective,
         "folds": list(range(1, 11)),
         "val_strategy": "val_fold = (test_fold % 10) + 1",
-        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout, "patience": patience, "min_delta": min_delta, "hidden": hidden, "layers": layers},
+        "opt_overrides": {"epochs": epochs, "batch": batch, "lr": lr, "dropout": dropout, "patience": patience, "min_delta": min_delta, "weight_decay": weight_decay, "hidden": hidden, "layers": layers},
     }
     with open(out_dir / "config.json", "w") as f:
         json.dump(config, f, indent=2)
