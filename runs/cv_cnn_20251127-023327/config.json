@@ -1,0 +1,58 @@
+{
+  "model": "cnn",
+  "started_at": "20251127-023327",
+  "hyperparams": {
+    "epochs": 50,
+    "batch": 16,
+    "lr": 0.0007,
+    "dropout": 0.29,
+    "weight_decay": 0.0001,
+    "mixup": {
+      "enabled": false,
+      "alpha": 0.3,
+      "prob": 1.0
+    },
+    "wave_shift": {
+      "prob": 0.7,
+      "max_sec": 0.5
+    },
+    "specaugment": {
+      "enabled": false,
+      "prob": 0.25,
+      "time_masks": 1,
+      "freq_masks": 1,
+      "max_time": 6,
+      "max_freq": 6
+    },
+    "device": "cuda",
+    "early_stopping": {
+      "monitor": "val_loss",
+      "patience": 7,
+      "min_delta": 0.001
+    }
+  },
+  "folds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "val_strategy": "val_fold = (test_fold % 10) + 1",
+  "opt_overrides": {
+    "epochs": null,
+    "batch": 16,
+    "lr": 0.0007,
+    "dropout": 0.29,
+    "patience": null,
+    "min_delta": null,
+    "weight_decay": null,
+    "hidden": null,
+    "layers": null
+  }
+}
