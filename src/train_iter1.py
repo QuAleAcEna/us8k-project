@@ -38,6 +38,7 @@ BATCH   = int(os.getenv("CNN_BATCH", 32))
 EPOCHS  = int(os.getenv("CNN_EPOCHS", 50))
 LR      = float(os.getenv("CNN_LR", 1e-3))
 DROPOUT = float(os.getenv("CNN_DROPOUT", 0.3))
+WEIGHT_DECAY = float(os.getenv("CNN_WEIGHT_DECAY", 1e-4))
 PATIENCE = int(os.getenv("CNN_PATIENCE", 7))             # early stopping patience (epochs)
 MIN_DELTA = float(os.getenv("CNN_MIN_DELTA", 1e-3))      # min loss improvement to reset patience
 N_CLASSES = 10
@@ -168,7 +169,7 @@ def main():
             }
         },
         "train": {
-            "batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT,
+            "batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT, "weight_decay": WEIGHT_DECAY,
             "early_stopping": {"monitor": "val_loss", "patience": PATIENCE, "min_delta": MIN_DELTA}
         },
         "device": DEVICE, "seed": SEED, "model": "AudioCNN"
@@ -188,7 +189,7 @@ def main():
 
     model = AudioCNN(N_CLASSES).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
-    opt   = torch.optim.Adam(model.parameters(), lr=LR)
+    opt   = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
     # histórico
     hist_csv = OUT / "history.csv"
