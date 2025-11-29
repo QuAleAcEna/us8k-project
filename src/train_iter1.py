@@ -26,7 +26,7 @@ N_MELS, N_FFT, HOP = 64, 1024, 512
 USE_MFCC, N_MFCC = False, 40
 
 # Time shift/crop no waveform
-SHIFT_PROB = float(os.getenv("CNN_SHIFT_PROB", 0.7)) #desativado via env CNN_SHIFT_PROB=0
+SHIFT_PROB = float(os.getenv("CNN_SHIFT_PROB", 0)) #desativado via env CNN_SHIFT_PROB=0
 SHIFT_MAX_SEC = float(os.getenv("CNN_SHIFT_MAX_SEC", 0.5))  # deslocamento máximo em segundos
 
 # Mixup (default on for treino)
@@ -44,11 +44,11 @@ SPEC_AUG_MAX_FREQ = int(os.getenv("SPEC_AUG_MAX_FREQ", 6))
 
 # treino (pode ser sobreposto por env: CNN_BATCH, CNN_EPOCHS, CNN_LR, CNN_DROPOUT)
 BATCH   = int(os.getenv("CNN_BATCH", 32))
-EPOCHS  = int(os.getenv("CNN_EPOCHS", 50))
+EPOCHS  = int(os.getenv("CNN_EPOCHS", 100))
 LR      = float(os.getenv("CNN_LR", 1e-3))
 DROPOUT = float(os.getenv("CNN_DROPOUT", 0.3))
 WEIGHT_DECAY = float(os.getenv("CNN_WEIGHT_DECAY", 1e-4))
-PATIENCE = int(os.getenv("CNN_PATIENCE", 7))             # early stopping patience (epochs)
+PATIENCE = int(os.getenv("CNN_PATIENCE", 12))             # early stopping patience (epochs)
 MIN_DELTA = float(os.getenv("CNN_MIN_DELTA", 1e-3))      # min loss improvement to reset patience
 N_CLASSES = 10
 
