@@ -22,7 +22,9 @@ TRAIN_FOLDS = [f for f in range(1, 11) if f not in (TEST_FOLD, VAL_FOLD)]
 
 # áudio / features
 SR, DUR = 22050, 4.0
-N_MELS, N_FFT, HOP = 64, 1024, 512
+N_MELS, N_FFT, HOP = 96, 1024, 256   # mais mels e hop menor para mais frames
+FMIN = float(os.getenv("CNN_FMIN", 30.0))
+FMAX = float(os.getenv("CNN_FMAX", 10000.0))
 USE_MFCC, N_MFCC = False, 40
 
 # Time shift/crop no waveform
@@ -43,9 +45,9 @@ SPEC_AUG_MAX_TIME = int(os.getenv("SPEC_AUG_MAX_TIME", 6))
 SPEC_AUG_MAX_FREQ = int(os.getenv("SPEC_AUG_MAX_FREQ", 6))
 
 # treino (pode ser sobreposto por env: CNN_BATCH, CNN_EPOCHS, CNN_LR, CNN_DROPOUT)
-BATCH   = int(os.getenv("CNN_BATCH", 32))
+BATCH   = int(os.getenv("CNN_BATCH", 16))
 EPOCHS  = int(os.getenv("CNN_EPOCHS", 100))
-LR      = float(os.getenv("CNN_LR", 1e-3))
+LR      = float(os.getenv("CNN_LR", 7e-4))
 DROPOUT = float(os.getenv("CNN_DROPOUT", 0.3))
 WEIGHT_DECAY = float(os.getenv("CNN_WEIGHT_DECAY", 1e-4))
 PATIENCE = int(os.getenv("CNN_PATIENCE", 12))             # early stopping patience (epochs)
@@ -97,29 +99,42 @@ class US8K(Dataset):
 
     def _spec_augment(self, F):
         F = F.copy()
-        n_mels, n_frames = F.shape
+        _, n_mels, n_frames = F.shape
         for _ in range(SPEC_AUG_FREQ_MASKS):
             width = np.random.randint(0, SPEC_AUG_MAX_FREQ + 1)
             if width == 0 or width >= n_mels: continue
             start = np.random.randint(0, n_mels - width + 1)
-            F[start:start + width, :] = 0.0
+            F[:, start:start + width, :] = 0.0
         for _ in range(SPEC_AUG_TIME_MASKS):
             width = np.random.randint(0, SPEC_AUG_MAX_TIME + 1)
             if width == 0 or width >= n_frames: continue
             start = np.random.randint(0, n_frames - width + 1)
-            F[:, start:start + width] = 0.0
+            F[:, :, start:start + width] = 0.0
         return F
 
     def _feat(self, y):
+        def _normalize_sample(F):
+            # normaliza mean/var por amostra (por canal)
+            mean = F.mean(axis=(1, 2), keepdims=True)
+            std = F.std(axis=(1, 2), keepdims=True) + 1e-8
+            return (F - mean) / std
+
         if USE_MFCC:
             F = librosa.feature.mfcc(y=y, sr=SR, n_mfcc=N_MFCC, n_fft=N_FFT, hop_length=HOP)
+            F = F.astype(np.float32)[np.newaxis, ...]           # (1,f,t)
         else:
-            S = librosa.feature.melspectrogram(y=y, sr=SR, n_mels=N_MELS, n_fft=N_FFT, hop_length=HOP)
-            F = librosa.power_to_db(S, ref=np.max)
-        F = librosa.util.normalize(F).astype(np.float32)    # (freq,time)
+            S = librosa.feature.melspectrogram(
+                y=y, sr=SR, n_mels=N_MELS, n_fft=N_FFT,
+                hop_length=HOP, fmin=FMIN, fmax=FMAX
+            )
+            log_mel = librosa.power_to_db(S, ref=np.max)
+            delta = librosa.feature.delta(log_mel)
+            delta2 = librosa.feature.delta(log_mel, order=2)
+            F = np.stack([log_mel, delta, delta2], axis=0).astype(np.float32)  # (3,f,t)
+        F = _normalize_sample(F)
         if self.augment and SPEC_AUG and (np.random.rand() < SPEC_AUG_PROB):
             F = self._spec_augment(F)
-        return torch.from_numpy(F).unsqueeze(0)             # (1,f,t)
+        return torch.from_numpy(F)
 
     def __getitem__(self, i):
         row = self.df.iloc[i]
@@ -130,10 +145,10 @@ class US8K(Dataset):
 
 # MODEL
 class AudioCNN(nn.Module):
-    def __init__(self, n_classes=10, dropout=DROPOUT):
+    def __init__(self, n_classes=10, dropout=DROPOUT, in_ch=3):
         super().__init__()
         self.fe = nn.Sequential(
-            nn.Conv2d(1,12,3,padding=1), nn.BatchNorm2d(12), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(in_ch,12,3,padding=1), nn.BatchNorm2d(12), nn.ReLU(), nn.MaxPool2d(2),
             nn.Conv2d(12,24,3,padding=1), nn.BatchNorm2d(24), nn.ReLU(), nn.MaxPool2d(2),
             nn.Conv2d(24,48,3,padding=1), nn.BatchNorm2d(48), nn.ReLU(),
             nn.AdaptiveAvgPool2d((1,1))
@@ -190,11 +205,16 @@ def run_epoch(model, loader, crit, opt=None):
 def main():
     print("Device:", DEVICE)
     OUT = prepare_run_dir()
+    in_ch = 1 if USE_MFCC else 3
     # salvar config usada
     config = {
         "dataset_root": ROOT, "csv": CSV,
         "folds": {"train": TRAIN_FOLDS, "val": VAL_FOLD, "test": TEST_FOLD},
-        "audio": {"sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP, "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC},
+        "audio": {
+            "sr": SR, "dur": DUR, "n_mels": N_MELS, "n_fft": N_FFT, "hop": HOP,
+            "fmin": FMIN, "fmax": FMAX,
+            "use_mfcc": USE_MFCC, "n_mfcc": N_MFCC
+        },
         "augment": {
             "wave": {"gain_prob": 0.3, "noise_prob": 0.3, "shift_prob": SHIFT_PROB, "shift_max_sec": SHIFT_MAX_SEC},
             "specaugment": {
@@ -208,7 +228,7 @@ def main():
             "batch": BATCH, "epochs": EPOCHS, "lr": LR, "dropout": DROPOUT, "weight_decay": WEIGHT_DECAY,
             "early_stopping": {"monitor": "val_loss", "patience": PATIENCE, "min_delta": MIN_DELTA}
         },
-        "device": DEVICE, "seed": SEED, "model": "AudioCNN"
+        "device": DEVICE, "seed": SEED, "model": {"name": "AudioCNN", "in_channels": in_ch}
     }
     with open(OUT / "config.json", "w") as f: json.dump(config, f, indent=2)
 
@@ -223,7 +243,7 @@ def main():
     va_dl = DataLoader(US8K(va_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
     te_dl = DataLoader(US8K(te_df, augment=False), batch_size=BATCH, shuffle=False, num_workers=num_workers, pin_memory=True)
 
-    model = AudioCNN(N_CLASSES).to(DEVICE)
+    model = AudioCNN(N_CLASSES, in_ch=in_ch).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
     opt   = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
