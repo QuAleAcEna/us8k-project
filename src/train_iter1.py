@@ -50,7 +50,7 @@ EPOCHS  = int(os.getenv("CNN_EPOCHS", 100))
 LR      = float(os.getenv("CNN_LR", 7e-4))
 DROPOUT = float(os.getenv("CNN_DROPOUT", 0.3))
 WEIGHT_DECAY = float(os.getenv("CNN_WEIGHT_DECAY", 1e-4))
-PATIENCE = int(os.getenv("CNN_PATIENCE", 12))             # early stopping patience (epochs)
+PATIENCE = int(os.getenv("CNN_PATIENCE", 20))             # early stopping patience (epochs)
 MIN_DELTA = float(os.getenv("CNN_MIN_DELTA", 1e-3))      # min loss improvement to reset patience
 N_CLASSES = 10
 
