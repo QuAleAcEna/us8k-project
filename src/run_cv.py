@@ -8,7 +8,7 @@ import seaborn as sns
 # CNN / RNN (tenta import relativo para execução com `python -m src.run_cv`)
 try:
     from .train_iter1 import (  # type: ignore
-        US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
+        US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN, USE_MFCC as USE_MFCC_CNN,
         BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
         PATIENCE as PATIENCE_CNN, MIN_DELTA as MIN_DELTA_CNN,
         DEVICE as DEVICE_CNN, WEIGHT_DECAY as WEIGHT_DECAY_CNN,
@@ -28,7 +28,7 @@ try:
 except ImportError:
     # fallback para execução direta `python src/run_cv.py`
     from train_iter1 import (
-        US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN,
+        US8K as US8K_CNN, AudioCNN, N_CLASSES as N_CLASSES_CNN, USE_MFCC as USE_MFCC_CNN,
         BATCH as BATCH_CNN, EPOCHS as EPOCHS_CNN, LR as LR_CNN, DROPOUT as DROPOUT_CNN,
         PATIENCE as PATIENCE_CNN, MIN_DELTA as MIN_DELTA_CNN,
         DEVICE as DEVICE_CNN, WEIGHT_DECAY as WEIGHT_DECAY_CNN,
@@ -121,7 +121,8 @@ def run_one_fold(model_type:str, test_fold:int, val_fold:int, epochs:int=None,
     if model_type == "rnn":
         model = Model(hidden=HIDDEN, n_layers=N_LAYERS, bidir=BIDIR, dropout=DROPOUT, n_classes=N_CLASSES).to(DEVICE)
     else:
-        model = Model(dropout=DROPOUT).to(DEVICE)
+        in_ch = 1 if USE_MFCC_CNN else 3
+        model = Model(dropout=DROPOUT, in_ch=in_ch).to(DEVICE)
     crit  = nn.CrossEntropyLoss()
     opt   = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
@@ -221,6 +222,7 @@ def main():
                 "max_time": SPEC_AUG_MAX_TIME_CNN, "max_freq": SPEC_AUG_MAX_FREQ_CNN
             },
             "device": DEVICE_CNN,
+            "in_channels": 1 if USE_MFCC_CNN else 3,
             "early_stopping": {"monitor": "val_loss", "patience": patience or PATIENCE_CNN, "min_delta": min_delta if min_delta is not None else MIN_DELTA_CNN},
         }
     elif model_type == "rnn":
